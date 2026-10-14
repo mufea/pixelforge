@@ -1,46 +1,51 @@
-# Dependencies
+# dependencies
 node_modules/
 .pnpm-store/
+.pnp
+.pnp.*
 
-# Next.js
+# next.js
 .next/
 out/
 
-# Environment and secrets
+# environment and secrets
 .env
 .env.local
 .env.*.local
 !.env.example
 
-# Prisma
-prisma/*.db
-prisma/*.db-journal
+# prisma generated client
+generated/
 
-# Logs
+# logs
 logs/
 *.log
 npm-debug.log*
 pnpm-debug.log*
 
-# Test and coverage
+# test and coverage
 coverage/
 playwright-report/
 test-results/
 
-# OS and editor
+# os and editor
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
 
-# Build artifacts
+# build
 dist/
 tmp/
 *.tsbuildinfo
+next-env.d.ts
 
-# Storage local cache
+# storage
 .storage/
 
-# Agent scratch (never commit)
+# vercel
+.vercel
+
+# agent scratch
 agent-tools/

@@ -1,10 +1,10 @@
 # Implementation plan
 
-Phase 0 is complete (**PASS**). Later phases start only after the decisions below are approved, and only if the previous phase has no unresolved blockers.
+Phase 0 is complete (**PASS**). Decisions D1–D10 were approved on 14 October 2026. Phase 1 is in progress.
 
-## Decisions that need approval before Phase 1
+## Decisions (approved)
 
-These are expensive to reverse. Implementation will use the **proposed** option unless you direct otherwise.
+These are expensive to reverse. Implementation uses the **proposed** option.
 
 | ID | Topic | Proposed | Alternatives |
 | --- | --- | --- | --- |
@@ -29,7 +29,7 @@ Acceptance criteria: see [PHASE_0.md](./PHASE_0.md).
 
 ## Phase 1 — Foundation
 
-**Starts after D1–D10 approval.**
+**Status: PASS (14 October 2026)** — see [PHASE_1.md](./PHASE_1.md).
 
 Scope:
 

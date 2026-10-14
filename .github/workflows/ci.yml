@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pixelforge
+          POSTGRES_PASSWORD: pixelforge
+          POSTGRES_DB: pixelforge
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pixelforge -d pixelforge"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://pixelforge:pixelforge@127.0.0.1:5432/pixelforge?schema=public
+      APP_URL: http://127.0.0.1:43127
+      BETTER_AUTH_SECRET: ci-secret-ci-secret-ci-secret-ci-12
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma generate
+      - run: pnpm exec prisma migrate deploy
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+        env:
+          NODE_ENV: production
