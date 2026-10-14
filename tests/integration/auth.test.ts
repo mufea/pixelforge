@@ -30,21 +30,24 @@ describe("authentication", () => {
     expect(signedUp.user.role).toBe("user");
     createdUserIds.push(signedUp.user.id);
 
+    const signInResponse = await auth.api.signInEmail({
+      body: { email, password },
+      asResponse: true,
+    });
+    expect(signInResponse.ok).toBe(true);
+    const setCookie = signInResponse.headers.get("set-cookie") ?? "";
+    expect(setCookie).toMatch(/HttpOnly/i);
+    expect(setCookie).toMatch(/SameSite=Lax/i);
+    expect(setCookie).not.toMatch(/https:\/\//i);
+
     const signIn = await auth.api.signInEmail({
       body: { email, password },
     });
     expect(signIn.user.id).toBe(signedUp.user.id);
 
-    const session = await auth.api.getSession({
-      headers: new Headers({
-        cookie: `better-auth.session_token=${signIn.token}`,
-      }),
-    });
-    // Better Auth may store the session token in a signed cookie, so fall back to the user record.
     const stored = await prisma.user.findUnique({ where: { email } });
     expect(stored?.email).toBe(email);
     expect(stored?.role).toBe("user");
-    expect(session?.user.id ?? stored?.id).toBeTruthy();
   });
 
   it("ignores a client-supplied admin role on registration", async () => {

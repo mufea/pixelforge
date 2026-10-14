@@ -10,12 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth/auth-client";
+import { safeInternalPath } from "@/lib/security/paths";
 import { signInSchema, type SignInInput } from "@/lib/validators/auth";
 
 export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextPath = searchParams.get("next") ?? "/app";
+  const nextPath = safeInternalPath(searchParams.get("next"));
   const [pending, setPending] = useState(false);
   const form = useForm<SignInInput>({
     resolver: zodResolver(signInSchema),

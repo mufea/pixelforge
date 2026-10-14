@@ -1,6 +1,6 @@
 # Implementation plan
 
-Phase 0 is complete (**PASS**). Decisions D1–D10 were approved on 14 October 2026. Phase 1 is in progress.
+Phase 0 is **PASS**. Decisions D1–D10 were approved on 14 October 2026. Phase 1 is **PASS**. A post-test code audit is in [POST_TEST_AUDIT.md](./POST_TEST_AUDIT.md). Phase 2 has **not** been started.
 
 ## Decisions (approved)
 
@@ -57,7 +57,23 @@ Acceptance criteria:
 
 Tests: registration, login, session, role guard, CSRF/cookie flags as applicable.
 
+## Post-test audit (14 October 2026)
+
+**Status: complete. Next phase not started.**
+
+The 8 UI scenarios from the initial test report are consistent with Phase 1 code (auth, plans, admin counts, honest empty gallery). They do not demonstrate AI, uploads, credits, or payments.
+
+Repository evidence:
+
+- No `lib/ai` adapters, no Sharp, no S3 client, no BullMQ processors, no credit ledger, no payment webhooks.
+- `GET /api/v1/generate` is 404 (no fabricated success path).
+- Two in-scope defects were fixed during the audit: open redirect on login `next`, and auth-email JWT logging.
+
+**Recommended next phase:** Phase 2 (projects, secure uploads, ownership isolation). Do not start it until this audit is accepted.
+
 ## Phase 2 — Projects and assets
+
+**Status: not started. Gate: post-test audit accepted.**
 
 Scope: projects CRUD, presigned upload, magic-byte and dimension validation, EXIF strip, private download, quotas, ownership.
 

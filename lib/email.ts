@@ -61,7 +61,7 @@ export async function sendAuthEmail(input: {
   }
 
   logger.info(
-    { to: input.to, kind: input.kind, url: input.url },
-    "Auth email logged because no email provider is configured",
+    { to: input.to, kind: input.kind },
+    "Auth email issued in development; configure Resend or SMTP to deliver it",
   );
 }

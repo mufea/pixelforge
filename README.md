@@ -56,4 +56,5 @@ See `docs/` for architecture, database, providers, billing, security, deployment
 | --- | --- |
 | 0 Architecture | PASS |
 | 1 Foundation | PASS |
+| Post-test audit | Complete — see docs/POST_TEST_AUDIT.md |
 | 2–7 | Not started |

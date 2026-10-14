@@ -17,6 +17,8 @@ export const logger = pino({
       "*.apiKey",
       "*.accessToken",
       "*.signedUrl",
+      "url",
+      "*.url",
     ],
     remove: true,
   },
