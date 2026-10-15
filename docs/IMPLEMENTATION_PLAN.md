@@ -1,6 +1,6 @@
 # Implementation plan
 
-Phase 0 is **PASS**. Decisions D1–D10 were approved on 14 October 2026. Phase 1 is **PASS**. A post-test code audit is in [POST_TEST_AUDIT.md](./POST_TEST_AUDIT.md). Phase 2 has **not** been started.
+Phase 0 is **PASS**. Decisions D1–D10 were approved on 14 October 2026. Phase 1 is **PASS**. A post-test code audit is in [POST_TEST_AUDIT.md](./POST_TEST_AUDIT.md). Phase 2 is **PASS**. Phase 3 has not been started.
 
 ## Decisions (approved)
 
@@ -69,11 +69,11 @@ Repository evidence:
 - `GET /api/v1/generate` is 404 (no fabricated success path).
 - Two in-scope defects were fixed during the audit: open redirect on login `next`, and auth-email JWT logging.
 
-**Recommended next phase:** Phase 2 (projects, secure uploads, ownership isolation). Do not start it until this audit is accepted.
+**Recommended next phase at audit time:** Phase 2. **Update 15 October 2026:** Phase 2 was approved and completed. Phase 3 has not started.
 
 ## Phase 2 — Projects and assets
 
-**Status: not started. Gate: post-test audit accepted.**
+**Status: PASS (15 October 2026)** — see [PHASE_2.md](./PHASE_2.md).
 
 Scope: projects CRUD, presigned upload, magic-byte and dimension validation, EXIF strip, private download, quotas, ownership.
 
@@ -173,7 +173,7 @@ Acceptance criteria:
 | Redis 7 | Phase 3 (Compose in Phase 1) | |
 | MinIO / S3 | Phase 2 | |
 | Better Auth, Prisma 7 | Phase 1 | |
-| Sharp | Phase 3 | |
+| Sharp | Phase 2 decode/EXIF strip; Phase 3 converter UI | |
 | OpenAI API key | Phase 3 live generate | Optional; app remains usable with mock/not-configured |
 | Fal key | Phase 4 specialized ops | Optional |
 | Google AI key | Phase 4 alternate generate/edit | Optional |

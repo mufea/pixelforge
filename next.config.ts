@@ -31,6 +31,7 @@ const nextConfig: NextConfig = {
     "@prisma/adapter-pg",
     "@prisma/client-runtime-utils",
     "pg",
+    "sharp",
   ],
   turbopack: {
     rules: {

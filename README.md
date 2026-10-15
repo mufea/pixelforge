@@ -2,13 +2,13 @@
 
 Credit-metered AI image studio: generation, editing, enhancement, conversion, projects, and an admin console.
 
-Phase 1 is live: authentication, role-based workspace and admin shells, public marketing pages, PostgreSQL persistence, health checks, and a seedable plan catalog. Uploads, workers that call AI providers, and payments are not claimed as working yet.
+Phase 2 is live: authentication, owned projects, private image uploads with magic-byte validation, and short-lived download URLs. AI generation, conversion jobs, credits, and payments are not claimed as working yet.
 
 ## Requirements
 
 - Node.js 22 and pnpm 10
 - PostgreSQL 16 (Docker Compose or a local server)
-- Redis 7 and MinIO are defined in Compose for later phases
+- Redis 7 (jobs, Phase 3) and MinIO/S3 (uploads; local private storage is used if S3 is unset in development)
 
 ## Setup
 
@@ -57,4 +57,5 @@ See `docs/` for architecture, database, providers, billing, security, deployment
 | 0 Architecture | PASS |
 | 1 Foundation | PASS |
 | Post-test audit | Complete — see docs/POST_TEST_AUDIT.md |
-| 2–7 | Not started |
+| 2 Projects and assets | PASS |
+| 3–7 | Not started |

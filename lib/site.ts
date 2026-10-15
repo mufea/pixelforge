@@ -83,7 +83,7 @@ export const faqs = [
   {
     question: "Where are my files stored?",
     answer:
-      "Uploads and outputs are private by default in S3-compatible storage. Access uses short-lived signed URLs after an ownership check. That pipeline ships in Phase 2.",
+      "Uploads and outputs are private. Access uses a short-lived signed URL issued after an ownership check. Object keys are server-generated and never include the original filename.",
   },
   {
     question: "Which AI providers are supported?",

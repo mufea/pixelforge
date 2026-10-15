@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatBytes } from "@/lib/assets/quota";
 import { getCurrentSession } from "@/lib/auth/session";
+import { getEnv } from "@/lib/env";
 import { prisma } from "@/lib/db";
+import { listProjects } from "@/lib/projects/service";
 import { toolsCatalog } from "@/lib/site";
 
 export const metadata: Metadata = { title: "Workspace" };
@@ -14,9 +18,12 @@ export default async function DashboardPage() {
     return null;
   }
 
-  const profile = await prisma.userProfile.findUnique({
-    where: { userId: session.user.id },
-  });
+  const [profile, projects] = await Promise.all([
+    prisma.userProfile.findUnique({ where: { userId: session.user.id } }),
+    listProjects(session.user.id),
+  ]);
+  const quota = getEnv().STORAGE_QUOTA_BYTES;
+  const used = profile?.storageUsedBytes ?? 0;
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-8">
@@ -25,7 +32,7 @@ export default async function DashboardPage() {
           {profile?.displayName ? `Welcome, ${profile.displayName}` : "Workspace"}
         </h1>
         <p className="mt-2 text-muted-foreground">
-          Account, session, and plan configuration are live. Projects, uploads, and AI jobs are not claimed as working yet.
+          Projects and private uploads are live. AI generation, conversion jobs, and payments are not claimed as working yet.
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
@@ -37,13 +44,9 @@ export default async function DashboardPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Verification</CardTitle>
+            <CardTitle>Storage</CardTitle>
             <CardDescription>
-              {session.user.emailVerified ? (
-                <Badge>Verified</Badge>
-              ) : (
-                <span>Unverified — production jobs will require a confirmed email.</span>
-              )}
+              {formatBytes(used)} of {formatBytes(quota)} used
             </CardDescription>
           </CardHeader>
         </Card>
@@ -54,14 +57,44 @@ export default async function DashboardPage() {
           </CardHeader>
         </Card>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Projects</CardTitle>
-          <CardDescription>
-            No project library yet. Secure uploads and ownership checks are the next phase. Your account is ready to attach them.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-xl font-semibold">Projects</h2>
+        <Button asChild>
+          <Link href="/app/projects/new">New project</Link>
+        </Button>
+      </div>
+      {projects.length === 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>No projects yet</CardTitle>
+            <CardDescription>
+              Create a project to upload private images. Other accounts cannot open your files by id.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {projects.slice(0, 4).map((project) => (
+            <Link key={project.id} href={`/app/projects/${project.id}`} className="block">
+              <Card className="h-full transition-colors hover:bg-muted/40">
+                <CardHeader>
+                  <CardTitle>{project.name}</CardTitle>
+                  <CardDescription>
+                    {project._count.assets} {project._count.assets === 1 ? "image" : "images"}
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
+      <p className="text-sm text-muted-foreground">
+        Open the full library in{" "}
+        <Link href="/app/projects" className="underline-offset-4 hover:underline">
+          projects
+        </Link>
+        .
+      </p>
       <div>
         <h2 className="text-xl font-semibold">Upcoming tools</h2>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -77,9 +110,6 @@ export default async function DashboardPage() {
           ))}
         </div>
       </div>
-      <p className="text-sm text-muted-foreground">
-        Update your display name in <Link href="/app/settings" className="underline-offset-4 hover:underline">settings</Link>.
-      </p>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutDashboard, LogOut, Settings, Shield } from "lucide-react";
+import { FolderOpen, LayoutDashboard, LogOut, Settings, Shield } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Brand } from "@/components/brand";
@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 
 const items = [
   { href: "/app", label: "Overview", icon: LayoutDashboard },
+  { href: "/app/projects", label: "Projects", icon: FolderOpen },
   { href: "/app/settings", label: "Settings", icon: Settings },
 ];
 
@@ -43,7 +44,8 @@ export function AppNav({
             href={item.href}
             className={cn(
               "flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-              pathname === item.href && "bg-sidebar-accent text-sidebar-accent-foreground",
+              (item.href === "/app" ? pathname === "/app" : pathname === item.href || pathname.startsWith(`${item.href}/`)) &&
+                "bg-sidebar-accent text-sidebar-accent-foreground",
             )}
           >
             <item.icon className="size-4" />

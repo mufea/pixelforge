@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isGoogleOAuthConfigured, loadEnv } from "@/lib/env";
+import { isGoogleOAuthConfigured, isS3Configured, loadEnv } from "@/lib/env";
 
 const required = {
   APP_URL: "http://127.0.0.1:43127",
@@ -34,6 +34,15 @@ describe("environment parsing", () => {
         AI_PROVIDER_MODE: "mock",
       }),
     ).toThrow(/mock is not allowed in production/);
+  });
+
+  it("treats incomplete S3 settings as unconfigured", () => {
+    const env = loadEnv({
+      ...required,
+      S3_ENDPOINT: "http://127.0.0.1:9000",
+      S3_ACCESS_KEY_ID: "minioadmin",
+    });
+    expect(isS3Configured(env)).toBe(false);
   });
 
   it("requires a long Better Auth secret", () => {

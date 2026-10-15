@@ -21,6 +21,10 @@ model User {
   accounts      Account[]
   profile       UserProfile?
   auditLogs     AuditLog[] @relation("AuditActor")
+  projects      Project[]
+  assets        Asset[]
+  assetVersions AssetVersion[]
+  uploadIntents UploadIntent[]
 
   @@unique([email])
   @@map("user")
@@ -76,16 +80,98 @@ model Verification {
 }
 
 model UserProfile {
-  id          String   @id @default(uuid())
-  userId      String   @unique
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  displayName String?
-  locale      String   @default("en")
-  timezone    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName      String?
+  locale           String   @default("en")
+  timezone         String?
+  storageUsedBytes Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@index([userId])
+}
+
+model Project {
+  id            String         @id @default(uuid())
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  description   String?
+  deletedAt     DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  assets        Asset[]
+  uploadIntents UploadIntent[]
+
+  @@index([userId, updatedAt])
+  @@index([userId, deletedAt])
+}
+
+model Asset {
+  id               String         @id @default(uuid())
+  userId           String
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId        String?
+  project          Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  kind             String         @default("ORIGINAL")
+  mimeType         String
+  byteSize         Int
+  width            Int
+  height           Int
+  checksumSha256   String
+  storageKey       String         @unique
+  originalFilename String
+  deletedAt        DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  versions         AssetVersion[]
+  uploadIntent     UploadIntent?
+
+  @@index([userId, createdAt])
+  @@index([projectId])
+  @@index([userId, deletedAt])
+}
+
+model AssetVersion {
+  id         String   @id @default(uuid())
+  assetId    String
+  asset      Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  version    Int
+  mimeType   String
+  byteSize   Int
+  width      Int
+  height     Int
+  storageKey String   @unique
+  createdAt  DateTime @default(now())
+
+  @@unique([assetId, version])
+  @@index([userId])
+}
+
+model UploadIntent {
+  id                String    @id @default(uuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId         String?
+  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  storageKey        String    @unique
+  declaredMime      String
+  declaredBytes     Int
+  originalFilename  String
+  status            String    @default("pending")
+  assetId           String?   @unique
+  asset             Asset?    @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  errorCode         String?
+  expiresAt         DateTime
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status, expiresAt])
 }
 
 model Plan {

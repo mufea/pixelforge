@@ -39,8 +39,22 @@ const envSchema = z.object({
   MIDTRANS_SERVER_KEY: optionalString,
   MIDTRANS_CLIENT_KEY: optionalString,
   S3_ENDPOINT: optionalString,
+  S3_REGION: z.string().default("us-east-1"),
+  S3_BUCKET: optionalString,
   S3_ACCESS_KEY_ID: optionalString,
   S3_SECRET_ACCESS_KEY: optionalString,
+  S3_FORCE_PATH_STYLE: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value !== "false"),
+  S3_PRESIGN_UPLOAD_TTL_SECONDS: z.coerce.number().int().positive().default(300),
+  S3_PRESIGN_DOWNLOAD_TTL_SECONDS: z.coerce.number().int().positive().default(120),
+  MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(20_971_520),
+  MAX_IMAGE_PIXELS: z.coerce.number().int().positive().default(25_000_000),
+  MAX_IMAGE_EDGE_PX: z.coerce.number().int().positive().default(8192),
+  STORAGE_QUOTA_BYTES: z.coerce.number().int().positive().default(1_073_741_824),
+  STORAGE_LOCAL_DIR: z.string().default(".storage"),
+  UPLOAD_INTENT_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().nonnegative().default(30),
   AI_JOBS_ENABLED: z
     .enum(["true", "false"])
     .optional()
@@ -78,6 +92,12 @@ export function isGoogleOAuthConfigured(
   env: Pick<AppEnv, "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET"> = getEnv(),
 ): boolean {
   return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+}
+
+export function isS3Configured(
+  env: Pick<AppEnv, "S3_ENDPOINT" | "S3_BUCKET" | "S3_ACCESS_KEY_ID" | "S3_SECRET_ACCESS_KEY"> = getEnv(),
+): boolean {
+  return Boolean(env.S3_ENDPOINT && env.S3_BUCKET && env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY);
 }
 
 export function resetEnvCache() {
