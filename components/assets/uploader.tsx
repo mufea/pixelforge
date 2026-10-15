@@ -8,6 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+function declaredImageMime(file: File) {
+  if (file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp") {
+    return file.type;
+  }
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".png")) return "image/png";
+  if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+  if (name.endsWith(".webp")) return "image/webp";
+  return null;
+}
+
 type UploadState =
   | { status: "idle" }
   | { status: "uploading"; filename: string }
@@ -18,6 +29,15 @@ export function AssetUploader({ projectId }: { projectId: string }) {
   const [state, setState] = useState<UploadState>({ status: "idle" });
 
   async function uploadFile(file: File) {
+    const mimeType = declaredImageMime(file);
+    if (!mimeType) {
+      setState({
+        status: "error",
+        filename: file.name,
+        message: "Only JPEG, PNG, and WebP images can be uploaded.",
+      });
+      return;
+    }
     setState({ status: "uploading", filename: file.name });
     try {
       const intentResponse = await fetch("/api/uploads/intents", {
@@ -26,7 +46,7 @@ export function AssetUploader({ projectId }: { projectId: string }) {
         body: JSON.stringify({
           projectId,
           filename: file.name,
-          mimeType: file.type,
+          mimeType,
           byteSize: file.size,
         }),
       });
