@@ -47,6 +47,10 @@ describe("provider adapter architecture", () => {
       expect(resolveGenerateProvider()).toBe("mock");
       expect(resolveProvider("GENERATE")).toEqual({ providerId: "mock", modelId: "mock-png" });
       expect(getGenerationAdapter().providerId).toBe("mock");
+      expect(resolveProvider("REMOVE_BACKGROUND")).toEqual({
+        providerId: "mock",
+        modelId: "mock-bg-remove",
+      });
     });
 
     it("selects OpenAI when requested explicitly and configured", () => {
@@ -100,6 +104,24 @@ describe("provider adapter architecture", () => {
       } catch (error) {
         expect(error).toMatchObject({ code: "PROVIDER_NOT_CONFIGURED" });
       }
+    });
+
+    it("fails closed in live mode when no background-removal provider is configured", () => {
+      liveEnv();
+      try {
+        resolveProvider("REMOVE_BACKGROUND");
+        throw new Error("expected failure");
+      } catch (error) {
+        expect(error).toMatchObject({ code: "PROVIDER_NOT_CONFIGURED", status: 503 });
+      }
+    });
+
+    it("selects Fal for background removal when configured", () => {
+      liveEnv({ FAL_KEY: "fal_sk_test_not_real" });
+      expect(resolveProvider("REMOVE_BACKGROUND")).toEqual({
+        providerId: "fal",
+        modelId: "fal-ai/bria/background/remove",
+      });
     });
 
     it("rejects Fal when FAL_KEY is missing", () => {
@@ -166,7 +188,7 @@ describe("provider adapter architecture", () => {
     it("returns MODEL_DISABLED for catalog stubs that are not implemented yet", () => {
       liveEnv({ FAL_KEY: "fal_sk_test_not_real" });
       try {
-        resolveProvider("REMOVE_BACKGROUND", { providerId: "fal" });
+        resolveProvider("UPSCALE", { providerId: "fal" });
         throw new Error("expected failure");
       } catch (error) {
         expect(error).toMatchObject({ code: "MODEL_DISABLED" });
@@ -226,7 +248,7 @@ describe("provider adapter architecture", () => {
     it("does not call fetch from Fal or Google stubs", () => {
       const fetchSpy = vi.fn();
       vi.stubGlobal("fetch", fetchSpy);
-      expect(() => falUnimplemented("REMOVE_BACKGROUND")).toThrow(DomainError);
+      expect(() => falUnimplemented("UPSCALE")).toThrow(DomainError);
       expect(() => googleUnimplemented("GENERATE")).toThrow(DomainError);
       expect(fetchSpy).not.toHaveBeenCalled();
     });

@@ -4,7 +4,7 @@ Adapters sit behind operation interfaces. The UI and job worker never call vendo
 
 Live HTTP calls happen only when the matching server-side API key is set **and** `AI_PROVIDER_MODE` is not `mock`. Mock adapters are compiled for tests and for development when `AI_PROVIDER_MODE=mock` (ignored in production). A passing mock test does not verify a real integration.
 
-Phase 4.5 shipped the registry, factory, normalized errors, and centralized secret access. Sharp convert/resize/crop stays in `lib/images` and is not an AI provider. Fal and Google adapters are stubs that do not open network connections. Do not implement background removal, upscale, or edit until those slices are approved.
+Phase 4.5 shipped the registry, factory, normalized errors, and centralized secret access. Sharp convert/resize/crop stays in `lib/images` and is not an AI provider. Phase 4.2 enables `REMOVE_BACKGROUND` through that factory: mock in tests, Fal `fal-ai/bria/background/remove` when `FAL_KEY` is set. Upscale, edit, object removal, and Google remain stubs. Do not implement those until those slices are approved.
 
 Sources checked on 14 October 2026:
 

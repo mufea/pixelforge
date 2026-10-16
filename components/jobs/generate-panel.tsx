@@ -38,7 +38,7 @@ export function GeneratePanel({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [polledJobs, setPolledJobs] = useState<PublicJob[] | null>(null);
-  const jobs = polledJobs ?? initialJobs;
+  const jobs = (polledJobs ?? initialJobs).filter((job) => job.operation === "GENERATE");
 
   const active = jobs.some((job) => job.status === "queued" || job.status === "processing");
   useEffect(() => {

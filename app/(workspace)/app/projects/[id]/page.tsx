@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { createDownloadUrl, listProjectAssets } from "@/lib/assets/service";
 import { requireUser } from "@/lib/auth/session";
 import { generateUnavailableReason, isGenerateAvailable } from "@/lib/ai/generate";
+import { isRemoveBackgroundAvailable, removeBackgroundUnavailableReason } from "@/lib/ai/remove-background";
 import { DomainError } from "@/lib/errors";
 import { listProjectJobs, publicJob } from "@/lib/jobs/service";
 import { getOwnedProject } from "@/lib/projects/service";
@@ -116,7 +117,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       </Card>
       <div className="space-y-4">
         <h2 className="text-xl font-semibold">Library</h2>
-        <AssetGrid projectId={project.id} assets={cards} />
+        <AssetGrid
+          projectId={project.id}
+          assets={cards}
+          removeBackgroundAvailable={isRemoveBackgroundAvailable()}
+          removeBackgroundUnavailableReason={removeBackgroundUnavailableReason()}
+        />
       </div>
       <Card>
         <CardHeader>

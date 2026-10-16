@@ -44,6 +44,23 @@ export const MODEL_CATALOG: ProviderModelCatalogEntry[] = [
     capabilities: { ...GENERATE_ONLY, sizes: ["32x32"], implemented: true },
   },
   {
+    providerId: "mock",
+    modelId: "mock-bg-remove",
+    displayName: "Mock background removal",
+    enabled: true,
+    capabilities: {
+      operations: ["REMOVE_BACKGROUND"],
+      sizes: [],
+      maxN: 1,
+      supportsSeed: false,
+      supportsNegativePrompt: false,
+      supportsMask: false,
+      supportsReferenceImages: false,
+      outputFormats: ["png"],
+      implemented: true,
+    },
+  },
+  {
     providerId: "openai",
     modelId: "gpt-image-2.5-flare",
     displayName: "GPT Image 2.5 Flare",
@@ -60,8 +77,8 @@ export const MODEL_CATALOG: ProviderModelCatalogEntry[] = [
   {
     providerId: "fal",
     modelId: "fal-ai/bria/background/remove",
-    displayName: "Fal background removal (stub)",
-    enabled: false,
+    displayName: "Fal background removal",
+    enabled: true,
     capabilities: {
       operations: ["REMOVE_BACKGROUND"],
       sizes: [],
@@ -71,7 +88,7 @@ export const MODEL_CATALOG: ProviderModelCatalogEntry[] = [
       supportsMask: false,
       supportsReferenceImages: false,
       outputFormats: ["png"],
-      implemented: false,
+      implemented: true,
     },
   },
   {

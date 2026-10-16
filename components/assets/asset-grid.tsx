@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ConvertForm } from "@/components/assets/convert-form";
+import { RemoveBackgroundButton } from "@/components/assets/remove-background-button";
 import { deleteAssetAction } from "@/lib/actions/assets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,17 @@ export type AssetCard = {
   previewError: string | null;
 };
 
-export function AssetGrid({ projectId, assets }: { projectId: string; assets: AssetCard[] }) {
+export function AssetGrid({
+  projectId,
+  assets,
+  removeBackgroundAvailable = false,
+  removeBackgroundUnavailableReason = null,
+}: {
+  projectId: string;
+  assets: AssetCard[];
+  removeBackgroundAvailable?: boolean;
+  removeBackgroundUnavailableReason?: string | null;
+}) {
   if (assets.length === 0) {
     return (
       <Card>
@@ -36,13 +47,29 @@ export function AssetGrid({ projectId, assets }: { projectId: string; assets: As
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {assets.map((asset) => (
-        <AssetCardView key={asset.id} projectId={projectId} asset={asset} />
+        <AssetCardView
+          key={asset.id}
+          projectId={projectId}
+          asset={asset}
+          removeBackgroundAvailable={removeBackgroundAvailable}
+          removeBackgroundUnavailableReason={removeBackgroundUnavailableReason}
+        />
       ))}
     </div>
   );
 }
 
-function AssetCardView({ projectId, asset }: { projectId: string; asset: AssetCard }) {
+function AssetCardView({
+  projectId,
+  asset,
+  removeBackgroundAvailable,
+  removeBackgroundUnavailableReason,
+}: {
+  projectId: string;
+  asset: AssetCard;
+  removeBackgroundAvailable: boolean;
+  removeBackgroundUnavailableReason: string | null;
+}) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
 
@@ -60,10 +87,16 @@ function AssetCardView({ projectId, asset }: { projectId: string; asset: AssetCa
 
   return (
     <Card className="overflow-hidden">
-      <div className="aspect-square bg-muted">
+      <div
+        className={
+          asset.mimeType === "image/png"
+            ? "aspect-square bg-[length:16px_16px] bg-[repeating-conic-gradient(#d4d4d8_0%_25%,#f4f4f5_0%_50%)] dark:bg-[repeating-conic-gradient(#3f3f46_0%_25%,#27272a_0%_50%)]"
+            : "aspect-square bg-muted"
+        }
+      >
         {asset.previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={asset.previewUrl} alt={asset.originalFilename} className="size-full object-cover" />
+          <img src={asset.previewUrl} alt={asset.originalFilename} className="size-full object-contain" />
         ) : (
           <div className="flex size-full items-center justify-center px-4 text-center text-sm text-muted-foreground">
             {asset.previewError ?? "Preview unavailable"}
@@ -93,6 +126,12 @@ function AssetCardView({ projectId, asset }: { projectId: string; asset: AssetCa
             {pending ? "Removing…" : "Remove"}
           </Button>
         </div>
+        <RemoveBackgroundButton
+          projectId={projectId}
+          assetId={asset.id}
+          available={removeBackgroundAvailable}
+          unavailableReason={removeBackgroundUnavailableReason}
+        />
         <ConvertForm assetId={asset.id} currentMime={asset.mimeType} />
       </CardContent>
     </Card>

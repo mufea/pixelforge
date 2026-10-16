@@ -1,6 +1,6 @@
 # Phase 4 plan — AI image studio
 
-**Status:** Slice **4.1 PASS**. Slice **4.5 PASS** (in-code registry/factory; no Prisma migration). Slices 4.2–4.4 and 4.6 are not started. Do not implement the next slice until approved. See [PHASE_4_1.md](./PHASE_4_1.md) and [PHASE_4_5.md](./PHASE_4_5.md).
+**Status:** Slice **4.1 PASS**. Slice **4.5 PASS**. Slice **4.2 PASS** (background removal jobs; mock tests; no live Fal). Slices 4.3–4.4 and 4.6 are not started. Do not implement the next slice until approved. See [PHASE_4_1.md](./PHASE_4_1.md), [PHASE_4_5.md](./PHASE_4_5.md), and [PHASE_4_2.md](./PHASE_4_2.md).
 
 Phase 3 is **PASS**. This plan extends the existing Next.js app, Prisma schema, private storage, and BullMQ worker. It does not restart Phase 3 or replace working convert/generate paths.
 

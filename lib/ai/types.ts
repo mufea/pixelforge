@@ -62,6 +62,7 @@ export type EditInput = {
 
 export type RemoveBackgroundInput = {
   image: Buffer;
+  mimeType?: OutputImageMime;
 };
 
 export type UpscaleInput = {
@@ -77,6 +78,12 @@ export type ImageGenerationAdapter = {
   readonly providerId: ProviderId;
   readonly modelId: string;
   generate(input: GenerateInput, signal: AbortSignal): Promise<ProviderResult>;
+};
+
+export type BackgroundRemovalAdapter = {
+  readonly providerId: ProviderId;
+  readonly modelId: string;
+  removeBackground(input: RemoveBackgroundInput, signal: AbortSignal): Promise<ProviderResult>;
 };
 
 export type ProviderSelection = {

@@ -2,7 +2,7 @@ import { DomainError } from "@/lib/errors";
 import { assertSameOrigin } from "@/lib/http/origin";
 import { jsonError } from "@/lib/http/responses";
 import { requireUserFromRequest } from "@/lib/http/session";
-import { createGenerateJob, listProjectJobs, publicJob } from "@/lib/jobs/service";
+import { createStudioJob, listProjectJobs, publicJob } from "@/lib/jobs/service";
 
 export async function POST(request: Request) {
   try {
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     } catch {
       throw new DomainError("VALIDATION", "Request body must be JSON");
     }
-    const job = await createGenerateJob(session.user.id, body);
+    const job = await createStudioJob(session.user.id, body);
     return Response.json(publicJob(job), { status: 201 });
   } catch (error) {
     return jsonError(error);

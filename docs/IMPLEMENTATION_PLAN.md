@@ -116,7 +116,7 @@ Tests: Sharp conversion, job transitions, retry backoff, timeout mapping, mock a
 
 ## Phase 4 — AI image studio
 
-**Status: IN PROGRESS** — see [PHASE_4_PLAN.md](./PHASE_4_PLAN.md). Slice 4.1 PASS. Slice 4.5 PASS. Slices 4.2–4.4 and 4.6 are not started.
+**Status: IN PROGRESS** — see [PHASE_4_PLAN.md](./PHASE_4_PLAN.md). Slice 4.1 PASS. Slice 4.5 PASS. Slice 4.2 PASS. Slices 4.3–4.4 and 4.6 are not started.
 
 Scope: generator, editor (incl. mask when capable), background remover, upscaler, object remover, variations, product studio, marketing studio (Sharp text overlay), converter UI. Google + Fal adapters. Registry-driven model picker.
 

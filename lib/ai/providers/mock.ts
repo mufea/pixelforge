@@ -1,11 +1,17 @@
 import sharp from "sharp";
 import { normalizeProviderError } from "@/lib/ai/errors";
-import type { GenerateInput, ProviderResult } from "@/lib/ai/types";
+import type { GenerateInput, ProviderResult, RemoveBackgroundInput } from "@/lib/ai/types";
+
+function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) {
+    throw normalizeProviderError(
+      signal.reason ?? Object.assign(new Error("The operation was aborted"), { name: "TimeoutError" }),
+    );
+  }
+}
 
 export async function mockGenerate(input: GenerateInput, signal?: AbortSignal): Promise<ProviderResult> {
-  if (signal?.aborted) {
-    throw normalizeProviderError(signal.reason ?? Object.assign(new Error("The operation was aborted"), { name: "TimeoutError" }));
-  }
+  throwIfAborted(signal);
 
   const started = Date.now();
   const bytes = await sharp({
@@ -19,14 +25,48 @@ export async function mockGenerate(input: GenerateInput, signal?: AbortSignal): 
     .png()
     .toBuffer();
 
-  if (signal?.aborted) {
-    throw normalizeProviderError(signal.reason ?? Object.assign(new Error("The operation was aborted"), { name: "TimeoutError" }));
-  }
+  throwIfAborted(signal);
 
   return {
     images: [{ bytes, mimeType: "image/png", width: 32, height: 32 }],
     providerRequestId: `mock-${Buffer.from(input.prompt).toString("hex").slice(0, 12)}`,
     latencyMs: Date.now() - started,
     rawModel: "mock-png",
+  };
+}
+
+export async function mockRemoveBackground(
+  input: RemoveBackgroundInput,
+  signal?: AbortSignal,
+): Promise<ProviderResult> {
+  throwIfAborted(signal);
+  const started = Date.now();
+
+  const decoded = sharp(input.image, { failOn: "error" }).ensureAlpha();
+  const { data, info } = await decoded.raw().toBuffer({ resolveWithObject: true });
+  throwIfAborted(signal);
+
+  const border = Math.max(1, Math.min(2, Math.floor(Math.min(info.width, info.height) / 4)));
+  for (let y = 0; y < info.height; y += 1) {
+    for (let x = 0; x < info.width; x += 1) {
+      const edge = x < border || y < border || x >= info.width - border || y >= info.height - border;
+      if (edge) {
+        data[(y * info.width + x) * 4 + 3] = 0;
+      }
+    }
+  }
+
+  const bytes = await sharp(data, {
+    raw: { width: info.width, height: info.height, channels: 4 },
+  })
+    .png()
+    .toBuffer();
+  throwIfAborted(signal);
+
+  return {
+    images: [{ bytes, mimeType: "image/png", width: info.width, height: info.height }],
+    providerRequestId: `mock-bg-${info.width}x${info.height}`,
+    latencyMs: Date.now() - started,
+    rawModel: "mock-bg-remove",
   };
 }
