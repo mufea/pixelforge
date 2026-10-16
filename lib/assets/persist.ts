@@ -67,3 +67,14 @@ export async function persistDerivedAsset(input: {
     throw error;
   }
 }
+
+export async function rollbackDerivedAsset(userId: string, asset: { id: string; storageKey: string; byteSize: number }) {
+  await prisma.$transaction(async (tx) => {
+    await tx.asset.deleteMany({ where: { id: asset.id, userId } });
+    await tx.userProfile.updateMany({
+      where: { userId, storageUsedBytes: { gte: asset.byteSize } },
+      data: { storageUsedBytes: { decrement: asset.byteSize } },
+    });
+  });
+  await getStorage().deleteObject(asset.storageKey);
+}

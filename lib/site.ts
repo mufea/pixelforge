@@ -59,7 +59,7 @@ export const toolsCatalog = [
   {
     slug: "converter",
     name: "Converter",
-    summary: "PNG, JPEG, and WebP conversion with the original file preserved.",
+    summary: "PNG, JPEG, and WebP conversion, resize, and crop. Batch up to 20 owned images. Originals are preserved.",
     status: "Available",
   },
 ] as const;

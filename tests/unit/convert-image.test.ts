@@ -63,4 +63,28 @@ describe("convertImageBytes", () => {
       code: "VALIDATION_INVALID_SIGNATURE",
     });
   });
+
+  it("crops and resizes within limits", async () => {
+    const input = await png(12, 8);
+    const cropped = await convertImageBytes(input, "image/png", limits, {
+      crop: { left: 2, top: 1, width: 6, height: 4 },
+    });
+    expect(cropped.width).toBe(6);
+    expect(cropped.height).toBe(4);
+
+    const resized = await convertImageBytes(input, "image/jpeg", limits, { width: 6, height: 4 });
+    expect(resized.width).toBe(6);
+    expect(resized.height).toBe(4);
+    expect(detectImageMime(resized.bytes)).toBe("image/jpeg");
+  });
+
+  it("rejects crops outside the image and oversized resize targets", async () => {
+    const input = await png(12, 8);
+    await expect(
+      convertImageBytes(input, "image/png", limits, { crop: { left: 10, top: 0, width: 6, height: 4 } }),
+    ).rejects.toMatchObject({ code: "VALIDATION_CROP" });
+    await expect(convertImageBytes(input, "image/png", limits, { width: 80 })).rejects.toMatchObject({
+      code: "VALIDATION_IMAGE_TOO_LARGE",
+    });
+  });
 });

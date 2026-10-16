@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AssetGrid } from "@/components/assets/asset-grid";
+import { BatchConvertForm } from "@/components/assets/batch-convert-form";
 import { AssetUploader } from "@/components/assets/uploader";
 import { DeleteProjectButton } from "@/components/projects/delete-project-button";
 import { ProjectForm } from "@/components/projects/project-form";
@@ -105,6 +106,17 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 : "OpenAI is not configured. Set OPENAI_API_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests."
             }
           />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Batch convert, resize, and crop</CardTitle>
+          <CardDescription>
+            Up to 20 owned images. The whole selection is validated before any output is written. Originals are kept.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BatchConvertForm projectId={project.id} assets={cards} />
         </CardContent>
       </Card>
       <div className="space-y-4">

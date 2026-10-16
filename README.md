@@ -59,5 +59,5 @@ See `docs/` for architecture, database, providers, billing, security, deployment
 | Post-test audit | Complete — see docs/POST_TEST_AUDIT.md |
 | 2 Projects and assets | PASS |
 | 3 Converter and first AI job | PASS (live OpenAI generate verified) |
-| 4 AI image studio | Planning — see docs/PHASE_4_PLAN.md |
+| 4 AI image studio | 4.1 PASS (batch convert/resize/crop). 4.2–4.6 not started. |
 | 5–7 | Not started |
