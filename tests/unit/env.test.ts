@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isGoogleOAuthConfigured, isS3Configured, loadEnv } from "@/lib/env";
+import { isGoogleOAuthConfigured, isMockAiAllowed, isS3Configured, loadEnv } from "@/lib/env";
 
 const required = {
   APP_URL: "http://127.0.0.1:43127",
@@ -24,6 +24,12 @@ describe("environment parsing", () => {
       GOOGLE_CLIENT_SECRET: "secret",
     });
     expect(isGoogleOAuthConfigured(env)).toBe(true);
+  });
+
+  it("allows mock AI only in test or explicit development mock mode", () => {
+    expect(isMockAiAllowed(loadEnv({ ...required, NODE_ENV: "test", AI_PROVIDER_MODE: "live" }))).toBe(true);
+    expect(isMockAiAllowed(loadEnv({ ...required, NODE_ENV: "development", AI_PROVIDER_MODE: "mock" }))).toBe(true);
+    expect(isMockAiAllowed(loadEnv({ ...required, NODE_ENV: "development", AI_PROVIDER_MODE: "live" }))).toBe(false);
   });
 
   it("rejects mock AI mode in production", () => {

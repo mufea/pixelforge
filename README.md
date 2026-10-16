@@ -2,7 +2,7 @@
 
 Credit-metered AI image studio: generation, editing, enhancement, conversion, projects, and an admin console.
 
-Phase 2 is live: authentication, owned projects, private image uploads with magic-byte validation, and short-lived download URLs. AI generation, conversion jobs, credits, and payments are not claimed as working yet.
+Phase 3 is live: authentication, owned projects, private uploads, PNG/JPEG/WebP conversion (original preserved), and an asynchronous generate job. Live generation requires `OPENAI_API_KEY`; without it the API returns `PROVIDER_NOT_CONFIGURED` rather than a fake image. Credits and payments are not implemented.
 
 ## Requirements
 
@@ -37,7 +37,7 @@ Override with `SEED_ADMIN_PASSWORD` and `SEED_USER_PASSWORD`.
 | Command | Purpose |
 | --- | --- |
 | `pnpm dev` | Next.js on 127.0.0.1:43127 |
-| `pnpm worker` | Worker heartbeat (AI processors arrive in Phase 3) |
+| `pnpm worker` | BullMQ worker for generate jobs (requires `REDIS_URL`) |
 | `pnpm db:migrate` | Create/apply Prisma migrations |
 | `pnpm db:seed` | Plans, settings, admin and user accounts |
 | `pnpm lint` | ESLint |
@@ -58,4 +58,5 @@ See `docs/` for architecture, database, providers, billing, security, deployment
 | 1 Foundation | PASS |
 | Post-test audit | Complete — see docs/POST_TEST_AUDIT.md |
 | 2 Projects and assets | PASS |
-| 3–7 | Not started |
+| 3 Converter and first AI job | PASS (live OpenAI blocked: no `OPENAI_API_KEY`) |
+| 4–7 | Not started |

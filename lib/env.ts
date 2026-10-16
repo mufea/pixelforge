@@ -55,6 +55,10 @@ const envSchema = z.object({
   STORAGE_QUOTA_BYTES: z.coerce.number().int().positive().default(1_073_741_824),
   STORAGE_LOCAL_DIR: z.string().default(".storage"),
   UPLOAD_INTENT_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().nonnegative().default(30),
+  QUEUE_PREFIX: z.string().default("pixelforge"),
+  JOB_DEFAULT_TIMEOUT_MS: z.coerce.number().int().positive().default(180_000),
+  OPENAI_BASE_URL: z.string().default("https://api.openai.com/v1"),
+  OPENAI_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   AI_JOBS_ENABLED: z
     .enum(["true", "false"])
     .optional()
@@ -92,6 +96,17 @@ export function isGoogleOAuthConfigured(
   env: Pick<AppEnv, "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET"> = getEnv(),
 ): boolean {
   return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+}
+
+export function isOpenAIConfigured(env: Pick<AppEnv, "OPENAI_API_KEY"> = getEnv()): boolean {
+  return Boolean(env.OPENAI_API_KEY);
+}
+
+export function isMockAiAllowed(env: AppEnv = getEnv()): boolean {
+  if (env.NODE_ENV === "production") {
+    return false;
+  }
+  return env.NODE_ENV === "test" || env.AI_PROVIDER_MODE === "mock";
 }
 
 export function isS3Configured(

@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { ConvertForm } from "@/components/assets/convert-form";
 import { deleteAssetAction } from "@/lib/actions/assets";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -14,6 +16,7 @@ export type AssetCard = {
   byteSize: number;
   width: number;
   height: number;
+  kind: string;
   previewUrl: string | null;
   previewError: string | null;
 };
@@ -68,22 +71,29 @@ function AssetCardView({ projectId, asset }: { projectId: string; asset: AssetCa
         )}
       </div>
       <CardHeader>
-        <CardTitle className="truncate text-base">{asset.originalFilename}</CardTitle>
+        <CardTitle className="flex items-center gap-2 truncate text-base">
+          <span className="truncate">{asset.originalFilename}</span>
+          {asset.kind === "DERIVATIVE" ? <Badge variant="secondary">Converted</Badge> : null}
+          {asset.kind === "GENERATED" ? <Badge variant="secondary">Generated</Badge> : null}
+        </CardTitle>
         <CardDescription>
           {asset.width}×{asset.height} · {Math.max(1, Math.round(asset.byteSize / 1024))} KB · {asset.mimeType.replace("image/", "")}
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-wrap gap-2">
-        {asset.previewUrl ? (
-          <Button asChild variant="outline" size="sm">
-            <a href={asset.previewUrl} download={asset.originalFilename}>
-              Download
-            </a>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          {asset.previewUrl ? (
+            <Button asChild variant="outline" size="sm">
+              <a href={asset.previewUrl} download={asset.originalFilename}>
+                Download
+              </a>
+            </Button>
+          ) : null}
+          <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={onDelete}>
+            {pending ? "Removing…" : "Remove"}
           </Button>
-        ) : null}
-        <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={onDelete}>
-          {pending ? "Removing…" : "Remove"}
-        </Button>
+        </div>
+        <ConvertForm assetId={asset.id} currentMime={asset.mimeType} />
       </CardContent>
     </Card>
   );

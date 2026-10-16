@@ -17,8 +17,8 @@ export const toolsCatalog = [
   {
     slug: "generator",
     name: "Image generator",
-    summary: "Text-to-image and reference-driven generation with registry-backed models.",
-    status: "Phase 4",
+    summary: "Text-to-image jobs with a mock provider in tests and OpenAI when a server key is set.",
+    status: "Phase 3",
   },
   {
     slug: "editor",
@@ -59,8 +59,8 @@ export const toolsCatalog = [
   {
     slug: "converter",
     name: "Converter",
-    summary: "PNG, JPEG, WebP, and AVIF conversion, crop, and compression.",
-    status: "Phase 3",
+    summary: "PNG, JPEG, and WebP conversion with the original file preserved.",
+    status: "Available",
   },
 ] as const;
 

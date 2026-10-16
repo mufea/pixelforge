@@ -1,14 +1,17 @@
 import { getEnv } from "../lib/env";
 import { logger } from "../lib/logging";
+import { startJobWorker } from "../lib/jobs/queue";
 
 async function main() {
   const env = getEnv();
+  const worker = startJobWorker();
   logger.info(
     {
       redisConfigured: Boolean(env.REDIS_URL),
       jobsEnabled: env.AI_JOBS_ENABLED,
+      queueAttached: Boolean(worker),
     },
-    "PixelForge worker started. AI processors are registered in Phase 3.",
+    "PixelForge worker started",
   );
 
   setInterval(() => {

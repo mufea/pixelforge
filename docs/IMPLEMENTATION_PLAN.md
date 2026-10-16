@@ -1,6 +1,6 @@
 # Implementation plan
 
-Phase 0 is **PASS**. Decisions D1–D10 were approved on 14 October 2026. Phase 1 is **PASS**. A post-test code audit is in [POST_TEST_AUDIT.md](./POST_TEST_AUDIT.md). Phase 2 is **PASS**. Phase 3 has not been started.
+Phase 0 is **PASS**. Decisions D1–D10 were approved on 14 October 2026. Phase 1 is **PASS**. A post-test code audit is in [POST_TEST_AUDIT.md](./POST_TEST_AUDIT.md). Phase 2 is **PASS**. Phase 3 is **PASS** for conversion, job workflow, and mock generate tests. Live OpenAI generate is blocked on a missing `OPENAI_API_KEY`.
 
 ## Decisions (approved)
 
@@ -69,7 +69,7 @@ Repository evidence:
 - `GET /api/v1/generate` is 404 (no fabricated success path).
 - Two in-scope defects were fixed during the audit: open redirect on login `next`, and auth-email JWT logging.
 
-**Recommended next phase at audit time:** Phase 2. **Update 15 October 2026:** Phase 2 was approved and completed. Phase 3 has not started.
+**Recommended next phase at audit time:** Phase 2. **Update 16 October 2026:** Phase 2 and Phase 3 are complete. Phase 4 has not started.
 
 ## Phase 2 — Projects and assets
 
@@ -88,6 +88,8 @@ Acceptance criteria:
 Tests: tenant isolation, MIME/signature rejection, oversized image, quota.
 
 ## Phase 3 — Image processing and first AI job
+
+**Status: PASS (16 October 2026)** — converter, mock jobs, and live not-configured generate. See [PHASE_3.md](./PHASE_3.md). Live OpenAI generate remains blocked until `OPENAI_API_KEY` is set.
 
 Scope:
 

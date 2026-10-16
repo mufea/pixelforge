@@ -25,6 +25,7 @@ model User {
   assets        Asset[]
   assetVersions AssetVersion[]
   uploadIntents UploadIntent[]
+  jobs          AIJob[]
 
   @@unique([email])
   @@map("user")
@@ -104,6 +105,7 @@ model Project {
   updatedAt     DateTime       @updatedAt
   assets        Asset[]
   uploadIntents UploadIntent[]
+  jobs          AIJob[]
 
   @@index([userId, updatedAt])
   @@index([userId, deletedAt])
@@ -123,6 +125,10 @@ model Asset {
   checksumSha256   String
   storageKey       String         @unique
   originalFilename String
+  sourceAssetId    String?
+  sourceAsset      Asset?         @relation("AssetLineage", fields: [sourceAssetId], references: [id], onDelete: SetNull)
+  derivatives      Asset[]        @relation("AssetLineage")
+  sourceJobId      String?
   deletedAt        DateTime?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
@@ -172,6 +178,50 @@ model UploadIntent {
 
   @@index([userId, createdAt])
   @@index([status, expiresAt])
+}
+
+model AIJob {
+  id              String       @id @default(uuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId       String?
+  project         Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  operation       String
+  status          String
+  providerId      String
+  modelId         String
+  inputJson       Json
+  outputAssetIds  String[]     @default([])
+  reservationId   String?
+  attemptCount    Int          @default(0)
+  errorCode       String?
+  errorMessage    String?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  cancelledAt     DateTime?
+  timeoutAt       DateTime?
+  idempotencyKey  String?      @unique
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  events          AIJobEvent[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([providerId, createdAt])
+  @@index([projectId])
+}
+
+model AIJobEvent {
+  id          String   @id @default(uuid())
+  jobId       String
+  job         AIJob    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  fromStatus  String?
+  toStatus    String
+  attempt     Int
+  payloadJson Json?
+  createdAt   DateTime @default(now())
+
+  @@index([jobId, createdAt])
 }
 
 model Plan {

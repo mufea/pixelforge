@@ -32,6 +32,8 @@ const nextConfig: NextConfig = {
     "@prisma/client-runtime-utils",
     "pg",
     "sharp",
+    "bullmq",
+    "ioredis",
   ],
   turbopack: {
     rules: {

@@ -22,6 +22,17 @@ export function displayFilename(input: string) {
   return base.slice(0, 180);
 }
 
+export function extensionForMime(mime: AllowedImageMime) {
+  if (mime === "image/jpeg") return ".jpg";
+  if (mime === "image/webp") return ".webp";
+  return ".png";
+}
+
+export function filenameForMime(originalFilename: string, mime: AllowedImageMime) {
+  const base = displayFilename(originalFilename).replace(/\.(jpe?g|png|webp)$/i, "");
+  return `${base}${extensionForMime(mime)}`.slice(0, 180);
+}
+
 export function detectImageMime(bytes: Buffer): AllowedImageMime | null {
   if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
     return "image/png";

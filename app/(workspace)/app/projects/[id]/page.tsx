@@ -5,10 +5,13 @@ import { AssetGrid } from "@/components/assets/asset-grid";
 import { AssetUploader } from "@/components/assets/uploader";
 import { DeleteProjectButton } from "@/components/projects/delete-project-button";
 import { ProjectForm } from "@/components/projects/project-form";
+import { GeneratePanel } from "@/components/jobs/generate-panel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createDownloadUrl, listProjectAssets } from "@/lib/assets/service";
 import { requireUser } from "@/lib/auth/session";
+import { getEnv, isMockAiAllowed, isOpenAIConfigured } from "@/lib/env";
 import { DomainError } from "@/lib/errors";
+import { listProjectJobs, publicJob } from "@/lib/jobs/service";
 import { getOwnedProject } from "@/lib/projects/service";
 
 export const metadata: Metadata = { title: "Project" };
@@ -27,7 +30,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     throw error;
   }
 
-  const assets = await listProjectAssets(session.user.id, project.id);
+  const env = getEnv();
+  const generateAvailable = env.AI_JOBS_ENABLED && (isMockAiAllowed(env) || isOpenAIConfigured(env));
+  const [assets, jobs] = await Promise.all([
+    listProjectAssets(session.user.id, project.id),
+    listProjectJobs(session.user.id, project.id),
+  ]);
   const cards = await Promise.all(
     assets.map(async (asset) => {
       try {
@@ -39,6 +47,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           byteSize: asset.byteSize,
           width: asset.width,
           height: asset.height,
+          kind: asset.kind,
           previewUrl: download.url,
           previewError: null,
         };
@@ -50,6 +59,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           byteSize: asset.byteSize,
           width: asset.width,
           height: asset.height,
+          kind: asset.kind,
           previewUrl: null,
           previewError: "Signed preview could not be issued",
         };
@@ -75,6 +85,26 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </CardHeader>
         <CardContent>
           <AssetUploader projectId={project.id} />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Generate</CardTitle>
+          <CardDescription>
+            Text-to-image jobs run in the worker. Live mode never returns a fake image when no provider key is set.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <GeneratePanel
+            projectId={project.id}
+            initialJobs={jobs.map(publicJob)}
+            available={generateAvailable}
+            unavailableReason={
+              generateAvailable
+                ? null
+                : "OpenAI is not configured. Set OPENAI_API_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests."
+            }
+          />
         </CardContent>
       </Card>
       <div className="space-y-4">

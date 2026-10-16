@@ -1,6 +1,6 @@
 # Database design
 
-PostgreSQL is the system of record. Prisma ORM (pinned to v7 in Phase 1 for Better Auth adapter compatibility) owns the schema. Migrations are forward-only. Applied: `phase1_foundation`, `phase2_projects_assets`.
+PostgreSQL is the system of record. Prisma ORM (pinned to v7 in Phase 1 for Better Auth adapter compatibility) owns the schema. Migrations are forward-only. Applied: `phase1_foundation`, `phase2_projects_assets`, `phase3_convert_and_jobs`.
 
 All primary keys are UUID (`uuid` / `@db.Uuid` or `cuid` — **proposed: UUID v7** for time-locality on jobs and assets). Every user-owned row includes `userId` and is queried with that constraint. Soft-delete (`deletedAt`) is used for projects, assets, API keys, and users (account deletion grace). Credit ledger rows are never soft-deleted or updated.
 
@@ -49,6 +49,7 @@ Asset
   mimeType, byteSize, width, height, checksumSha256
   storageKey          # server-generated, never user path
   originalFilename    # display only
+  sourceAssetId?      # convert/edit lineage
   sourceJobId?
   deletedAt, createdAt, updatedAt
   @@unique(storageKey)
