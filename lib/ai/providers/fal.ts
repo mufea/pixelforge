@@ -3,11 +3,12 @@ import "server-only";
 import sharp from "sharp";
 import { getFalCredentials } from "@/lib/ai/config";
 import { domainErrorFromProviderResponse, normalizeProviderError } from "@/lib/ai/errors";
-import type { ImageOperation, ProviderResult, RemoveBackgroundInput } from "@/lib/ai/types";
+import type { ImageOperation, ProviderResult, RemoveBackgroundInput, UpscaleInput } from "@/lib/ai/types";
 import { detectImageMime } from "@/lib/assets/mime";
 import { DomainError } from "@/lib/errors";
 
 export const FAL_BACKGROUND_MODEL = "fal-ai/bria/background/remove";
+export const FAL_UPSCALE_MODEL = "fal-ai/flux-vision-upscaler";
 const FAL_RUN_ORIGIN = "https://fal.run";
 
 /**
@@ -70,13 +71,62 @@ export async function falRemoveBackground(
     request_id?: string;
   };
   const bytes = await readFalImageBytes(payload.image, signal);
-  const metadata = await inspectPng(bytes);
+  const metadata = await inspectFalImage(bytes);
 
   return {
-    images: [{ bytes, mimeType: "image/png", width: metadata.width, height: metadata.height }],
+    images: [{ bytes, mimeType: metadata.mimeType, width: metadata.width, height: metadata.height }],
     providerRequestId: payload.request_id,
     latencyMs: Date.now() - started,
     rawModel: FAL_BACKGROUND_MODEL,
+  };
+}
+
+export async function falUpscale(input: UpscaleInput, signal: AbortSignal): Promise<ProviderResult> {
+  const credentials = getFalCredentials();
+  if (input.scaleFactor !== 2 && input.scaleFactor !== 3 && input.scaleFactor !== 4) {
+    throw new DomainError("UNSUPPORTED_UPSCALE_FACTOR", "Upscale factor must be 2, 3, or 4");
+  }
+  const mime = input.mimeType ?? detectImageMime(input.image);
+  if (mime !== "image/jpeg" && mime !== "image/png" && mime !== "image/webp") {
+    throw new DomainError("VALIDATION_INVALID_SIGNATURE", "The source file is not a JPEG, PNG, or WebP image");
+  }
+
+  const started = Date.now();
+  const dataUri = `data:${mime};base64,${input.image.toString("base64")}`;
+  let response: Response;
+  try {
+    response = await fetch(`${FAL_RUN_ORIGIN}/${FAL_UPSCALE_MODEL}`, {
+      method: "POST",
+      signal,
+      headers: {
+        Authorization: `Key ${credentials.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        image_url: dataUri,
+        upscale_factor: input.scaleFactor,
+      }),
+    });
+  } catch (error) {
+    throw normalizeProviderError(error);
+  }
+
+  if (!response.ok) {
+    throw await domainErrorFromProviderResponse(response);
+  }
+
+  const payload = (await response.json()) as {
+    image?: { url?: string; content?: string; file_data?: string; width?: number; height?: number };
+    request_id?: string;
+  };
+  const bytes = await readFalImageBytes(payload.image, signal);
+  const metadata = await inspectFalImage(bytes);
+
+  return {
+    images: [{ bytes, mimeType: metadata.mimeType, width: metadata.width, height: metadata.height }],
+    providerRequestId: payload.request_id,
+    latencyMs: Date.now() - started,
+    rawModel: FAL_UPSCALE_MODEL,
   };
 }
 
@@ -111,9 +161,10 @@ async function readFalImageBytes(
   return Buffer.from(await download.arrayBuffer());
 }
 
-async function inspectPng(bytes: Buffer) {
-  if (detectImageMime(bytes) !== "image/png") {
-    throw new DomainError("PROVIDER_REJECTED", "The image provider did not return a PNG", 502);
+async function inspectFalImage(bytes: Buffer) {
+  const mimeType = detectImageMime(bytes);
+  if (mimeType !== "image/png" && mimeType !== "image/jpeg" && mimeType !== "image/webp") {
+    throw new DomainError("PROVIDER_REJECTED", "The image provider did not return a JPEG, PNG, or WebP image", 502);
   }
   const metadata = await sharp(bytes, { failOn: "error" }).metadata();
   const width = metadata.width ?? 0;
@@ -121,5 +172,5 @@ async function inspectPng(bytes: Buffer) {
   if (width < 1 || height < 1) {
     throw new DomainError("PROVIDER_REJECTED", "The image provider did not return image bytes", 502);
   }
-  return { width, height };
+  return { mimeType, width, height };
 }

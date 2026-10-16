@@ -65,8 +65,12 @@ export type RemoveBackgroundInput = {
   mimeType?: OutputImageMime;
 };
 
+export type UpscaleScaleFactor = 2 | 3 | 4;
+
 export type UpscaleInput = {
   image: Buffer;
+  mimeType?: OutputImageMime;
+  scaleFactor: UpscaleScaleFactor;
 };
 
 export type RemoveObjectInput = {
@@ -84,6 +88,12 @@ export type BackgroundRemovalAdapter = {
   readonly providerId: ProviderId;
   readonly modelId: string;
   removeBackground(input: RemoveBackgroundInput, signal: AbortSignal): Promise<ProviderResult>;
+};
+
+export type UpscaleAdapter = {
+  readonly providerId: ProviderId;
+  readonly modelId: string;
+  upscale(input: UpscaleInput, signal: AbortSignal): Promise<ProviderResult>;
 };
 
 export type ProviderSelection = {

@@ -12,6 +12,7 @@ import { createDownloadUrl, listProjectAssets } from "@/lib/assets/service";
 import { requireUser } from "@/lib/auth/session";
 import { generateUnavailableReason, isGenerateAvailable } from "@/lib/ai/generate";
 import { isRemoveBackgroundAvailable, removeBackgroundUnavailableReason } from "@/lib/ai/remove-background";
+import { isUpscaleAvailable, upscaleUnavailableReason } from "@/lib/ai/upscale";
 import { DomainError } from "@/lib/errors";
 import { listProjectJobs, publicJob } from "@/lib/jobs/service";
 import { getOwnedProject } from "@/lib/projects/service";
@@ -122,6 +123,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           assets={cards}
           removeBackgroundAvailable={isRemoveBackgroundAvailable()}
           removeBackgroundUnavailableReason={removeBackgroundUnavailableReason()}
+          upscaleAvailable={isUpscaleAvailable()}
+          upscaleUnavailableReason={upscaleUnavailableReason()}
         />
       </div>
       <Card>

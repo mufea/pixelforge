@@ -44,6 +44,9 @@ next-env.d.ts
 # storage
 .storage/
 
+# redis local dump
+dump.rdb
+
 # vercel
 .vercel
 

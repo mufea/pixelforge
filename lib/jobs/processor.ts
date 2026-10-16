@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/db";
 import { isRetryableProviderCode, isRetryableProviderError } from "@/lib/ai/errors";
-import { getProviderTimeoutMs, resolveProvider, runGenerate, runRemoveBackground } from "@/lib/ai/factory";
+import { getProviderTimeoutMs, resolveProvider, runGenerate, runRemoveBackground, runUpscale } from "@/lib/ai/factory";
 import { isImageOperation } from "@/lib/ai/types";
 import { detectImageMime, filenameForMime, isAllowedImageMime } from "@/lib/assets/mime";
 import { persistDerivedAsset, rollbackDerivedAsset } from "@/lib/assets/persist";
+import { assertResizeWithinLimits } from "@/lib/images/transform";
+import { isUpscaleScaleFactor } from "@/lib/validators/job";
 import { assertWithinQuota } from "@/lib/assets/quota";
 import { getOwnedAsset } from "@/lib/assets/service";
 import { validateAndSanitizeImage } from "@/lib/assets/validate-image";
@@ -62,7 +64,7 @@ export async function processJob(jobId: string) {
   });
 
   try {
-    if (job.operation !== "GENERATE" && job.operation !== "REMOVE_BACKGROUND") {
+    if (job.operation !== "GENERATE" && job.operation !== "REMOVE_BACKGROUND" && job.operation !== "UPSCALE") {
       throw new DomainError(
         isImageOperation(job.operation) ? "MODEL_CAPABILITY_UNSUPPORTED" : "VALIDATION",
         "Unsupported job operation",
@@ -75,6 +77,9 @@ export async function processJob(jobId: string) {
     }
     if (job.operation === "REMOVE_BACKGROUND") {
       return await executeRemoveBackground(job);
+    }
+    if (job.operation === "UPSCALE") {
+      return await executeUpscale(job);
     }
     return await executeGenerate(job);
   } catch (error) {
@@ -246,6 +251,78 @@ async function executeRemoveBackground(job: {
   }
 }
 
+async function executeUpscale(job: {
+  id: string;
+  userId: string;
+  projectId: string | null;
+  providerId: string;
+  modelId: string;
+  inputJson: unknown;
+  attemptCount: number;
+}) {
+  const env = getEnv();
+  const assetId = readAssetId(job.inputJson);
+  const scaleFactor = readScaleFactor(job.inputJson);
+  const source = await getOwnedAsset(job.userId, assetId);
+  if (job.projectId && source.projectId !== job.projectId) {
+    throw new DomainError("NOT_FOUND", "Asset not found", 404);
+  }
+  assertOwnedStorageKey(job.userId, source.storageKey);
+  const stored = await getStorage().getObject(source.storageKey);
+  if (!stored) {
+    throw new DomainError("ASSET_BYTES_MISSING", "The original file is no longer in storage", 404);
+  }
+  if (stored.body.byteLength > env.MAX_UPLOAD_BYTES) {
+    throw new DomainError("VALIDATION_FILE_TOO_LARGE", "The source file exceeds the size limit");
+  }
+  const detected = detectImageMime(stored.body);
+  if (!detected || !isAllowedImageMime(detected)) {
+    throw new DomainError("VALIDATION_INVALID_SIGNATURE", "The source file is not a JPEG, PNG, or WebP image");
+  }
+
+  const limits = {
+    maxUploadBytes: env.MAX_UPLOAD_BYTES,
+    maxImagePixels: env.MAX_IMAGE_PIXELS,
+    maxImageEdgePx: env.MAX_IMAGE_EDGE_PX,
+  };
+  assertResizeWithinLimits(source.width * scaleFactor, source.height * scaleFactor, limits);
+
+  const provider = resolveProvider("UPSCALE", { providerId: job.providerId, modelId: job.modelId });
+  const result = await runUpscale(
+    { image: stored.body, mimeType: detected, scaleFactor },
+    AbortSignal.timeout(getProviderTimeoutMs(provider.providerId)),
+    { providerId: provider.providerId, modelId: provider.modelId },
+  );
+  const image = requireProviderImage(result);
+  if (image.width < source.width || image.height < source.height) {
+    throw new DomainError("PROVIDER_REJECTED", "The image provider did not upscale the image", 502);
+  }
+  assertResizeWithinLimits(image.width, image.height, limits);
+
+  const sanitized = await validateAndSanitizeImage(image.bytes, image.mimeType, limits);
+  await assertWithinQuota(job.userId, sanitized.bytes.byteLength);
+
+  const asset = await persistDerivedAsset({
+    userId: job.userId,
+    projectId: job.projectId,
+    kind: "DERIVATIVE",
+    mimeType: sanitized.mimeType,
+    bytes: sanitized.bytes,
+    width: sanitized.width,
+    height: sanitized.height,
+    originalFilename: filenameForMime(upscaledFilename(source.originalFilename, scaleFactor), sanitized.mimeType),
+    sourceAssetId: source.id,
+    sourceJobId: job.id,
+  });
+
+  try {
+    return await markJobSucceeded(job, result, asset.id);
+  } catch (error) {
+    await rollbackDerivedAsset(job.userId, asset);
+    throw error;
+  }
+}
+
 async function markJobSucceeded(
   job: { id: string; attemptCount: number },
   result: ProviderResult,
@@ -288,6 +365,21 @@ function requireProviderImage(result: ProviderResult) {
 
 function noBackgroundFilename(originalFilename: string) {
   return originalFilename.replace(/\.(jpe?g|png|webp)$/i, "") + "-no-bg.png";
+}
+
+function upscaledFilename(originalFilename: string, scaleFactor: number) {
+  return originalFilename.replace(/\.(jpe?g|png|webp)$/i, "") + `-${scaleFactor}x.png`;
+}
+
+function readScaleFactor(inputJson: unknown) {
+  if (typeof inputJson !== "object" || inputJson === null || !("scaleFactor" in inputJson)) {
+    throw new DomainError("UNSUPPORTED_UPSCALE_FACTOR", "Upscale factor must be 2, 3, or 4");
+  }
+  const scaleFactor = (inputJson as { scaleFactor: unknown }).scaleFactor;
+  if (!isUpscaleScaleFactor(scaleFactor)) {
+    throw new DomainError("UNSUPPORTED_UPSCALE_FACTOR", "Upscale factor must be 2, 3, or 4");
+  }
+  return scaleFactor;
 }
 
 function readAssetId(inputJson: unknown) {

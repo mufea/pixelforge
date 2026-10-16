@@ -61,6 +61,23 @@ export const MODEL_CATALOG: ProviderModelCatalogEntry[] = [
     },
   },
   {
+    providerId: "mock",
+    modelId: "mock-upscale",
+    displayName: "Mock upscale",
+    enabled: true,
+    capabilities: {
+      operations: ["UPSCALE"],
+      sizes: [],
+      maxN: 1,
+      supportsSeed: false,
+      supportsNegativePrompt: false,
+      supportsMask: false,
+      supportsReferenceImages: false,
+      outputFormats: ["png"],
+      implemented: true,
+    },
+  },
+  {
     providerId: "openai",
     modelId: "gpt-image-2.5-flare",
     displayName: "GPT Image 2.5 Flare",
@@ -94,8 +111,8 @@ export const MODEL_CATALOG: ProviderModelCatalogEntry[] = [
   {
     providerId: "fal",
     modelId: "fal-ai/flux-vision-upscaler",
-    displayName: "Fal upscaler (stub)",
-    enabled: false,
+    displayName: "Fal Flux Vision upscaler",
+    enabled: true,
     capabilities: {
       operations: ["UPSCALE"],
       sizes: [],
@@ -105,7 +122,7 @@ export const MODEL_CATALOG: ProviderModelCatalogEntry[] = [
       supportsMask: false,
       supportsReferenceImages: false,
       outputFormats: ["png"],
-      implemented: false,
+      implemented: true,
     },
   },
   {

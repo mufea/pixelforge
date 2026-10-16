@@ -7,9 +7,9 @@ import {
   isProviderConfigured,
 } from "@/lib/ai/config";
 import { normalizeProviderError } from "@/lib/ai/errors";
-import { falRemoveBackground, falUnimplemented } from "@/lib/ai/providers/fal";
+import { falRemoveBackground, falUnimplemented, falUpscale } from "@/lib/ai/providers/fal";
 import { googleUnimplemented } from "@/lib/ai/providers/google";
-import { mockGenerate, mockRemoveBackground } from "@/lib/ai/providers/mock";
+import { mockGenerate, mockRemoveBackground, mockUpscale } from "@/lib/ai/providers/mock";
 import { openaiGenerate } from "@/lib/ai/providers/openai-generate";
 import { assertOperationSupported, defaultModelFor, getModel, getProviderEntry } from "@/lib/ai/registry";
 import {
@@ -17,6 +17,8 @@ import {
   type BackgroundRemovalAdapter,
   type GenerateInput,
   type ImageGenerationAdapter,
+  type UpscaleAdapter,
+  type UpscaleInput,
   type ImageOperation,
   type ProviderId,
   type ProviderResult,
@@ -83,7 +85,7 @@ function resolveAutomatic(operation: ImageOperation): ResolvedProvider {
   if (operation === "GENERATE" && config.openai.configured) {
     return { providerId: "openai", modelId: "gpt-image-2.5-flare" };
   }
-  if (operation === "REMOVE_BACKGROUND" && config.fal.configured) {
+  if ((operation === "REMOVE_BACKGROUND" || operation === "UPSCALE") && config.fal.configured) {
     const fal = defaultModelFor("fal", operation);
     if (fal) {
       return { providerId: "fal", modelId: fal.modelId };
@@ -94,6 +96,9 @@ function resolveAutomatic(operation: ImageOperation): ResolvedProvider {
   }
   if (operation === "REMOVE_BACKGROUND") {
     throw new DomainError("PROVIDER_NOT_CONFIGURED", "No background removal provider is configured", 503);
+  }
+  if (operation === "UPSCALE") {
+    throw new DomainError("PROVIDER_NOT_CONFIGURED", "No upscale provider is configured", 503);
   }
   throw new DomainError("MODEL_CAPABILITY_UNSUPPORTED", `Operation ${operation} is not implemented`, 400);
 }
@@ -189,6 +194,34 @@ export function generateUnavailableReason(): string | null {
   return "OpenAI is not configured. Set OPENAI_API_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests.";
 }
 
+export function getUpscaleAdapter(selection: ProviderSelection = {}): UpscaleAdapter {
+  const resolved = resolveProvider("UPSCALE", selection);
+  if (resolved.providerId === "mock") {
+    return { providerId: "mock", modelId: resolved.modelId, upscale: mockUpscale };
+  }
+  if (resolved.providerId === "fal") {
+    return { providerId: "fal", modelId: resolved.modelId, upscale: falUpscale };
+  }
+  throw new DomainError(
+    "MODEL_CAPABILITY_UNSUPPORTED",
+    `Provider ${resolved.providerId} does not implement UPSCALE`,
+    400,
+  );
+}
+
+export async function runUpscale(
+  input: UpscaleInput,
+  signal: AbortSignal,
+  selection: ProviderSelection = {},
+): Promise<ProviderResult> {
+  try {
+    const adapter = getUpscaleAdapter(selection);
+    return await adapter.upscale(input, signal);
+  } catch (error) {
+    throw normalizeProviderError(error);
+  }
+}
+
 export function isRemoveBackgroundAvailable(): boolean {
   const config = getProviderRuntimeConfig();
   if (!config.jobsEnabled) {
@@ -204,6 +237,30 @@ export function isRemoveBackgroundAvailable(): boolean {
 
 export function removeBackgroundUnavailableReason(): string | null {
   if (isRemoveBackgroundAvailable()) {
+    return null;
+  }
+  const config = getProviderRuntimeConfig();
+  if (!config.jobsEnabled) {
+    return "AI jobs are temporarily disabled.";
+  }
+  return "Fal is not configured. Set FAL_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests.";
+}
+
+export function isUpscaleAvailable(): boolean {
+  const config = getProviderRuntimeConfig();
+  if (!config.jobsEnabled) {
+    return false;
+  }
+  try {
+    resolveProvider("UPSCALE");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function upscaleUnavailableReason(): string | null {
+  if (isUpscaleAvailable()) {
     return null;
   }
   const config = getProviderRuntimeConfig();

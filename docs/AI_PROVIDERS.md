@@ -4,7 +4,7 @@ Adapters sit behind operation interfaces. The UI and job worker never call vendo
 
 Live HTTP calls happen only when the matching server-side API key is set **and** `AI_PROVIDER_MODE` is not `mock`. Mock adapters are compiled for tests and for development when `AI_PROVIDER_MODE=mock` (ignored in production). A passing mock test does not verify a real integration.
 
-Phase 4.5 shipped the registry, factory, normalized errors, and centralized secret access. Sharp convert/resize/crop stays in `lib/images` and is not an AI provider. Phase 4.2 enables `REMOVE_BACKGROUND` through that factory: mock in tests, Fal `fal-ai/bria/background/remove` when `FAL_KEY` is set. Upscale, edit, object removal, and Google remain stubs. Do not implement those until those slices are approved.
+Phase 4.5 shipped the registry, factory, normalized errors, and centralized secret access. Sharp convert/resize/crop stays in `lib/images` and is not an AI provider. Phase 4.2 enables `REMOVE_BACKGROUND` through that factory: mock in tests, Fal `fal-ai/bria/background/remove` when `FAL_KEY` is set. Phase 4.3 enables `UPSCALE` the same way: mock nearest-neighbor in tests, Fal `fal-ai/flux-vision-upscaler` when `FAL_KEY` is set. Live mode never substitutes a Sharp resize when Fal is missing. Edit, object removal, and Google remain stubs. Do not implement those until those slices are approved.
 
 Sources checked on 14 October 2026:
 
@@ -101,7 +101,7 @@ Proposed first Fal models (IDs confirmed on fal.ai pages, access not verified):
 | Generation | `fal-ai/flux-2-pro` |
 | Background removal | `fal-ai/bria/background/remove` |
 | Object removal (mask) | `fal-ai/object-removal/mask` |
-| Upscale | `fal-ai/flux-vision-upscaler` |
+| Upscale | `fal-ai/flux-vision-upscaler` (implemented in 4.3: `POST https://fal.run/fal-ai/flux-vision-upscaler`, `{ image_url, upscale_factor }`; app factors 2\|3\|4 only) |
 
 Additional Fal models require the same doc check plus a cost entry before enablement.
 

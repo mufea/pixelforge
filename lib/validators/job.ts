@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+export const UPSCALE_SCALE_FACTORS = [2, 3, 4] as const;
+export type UpscaleScaleFactor = (typeof UPSCALE_SCALE_FACTORS)[number];
+
+export function isUpscaleScaleFactor(value: unknown): value is UpscaleScaleFactor {
+  return UPSCALE_SCALE_FACTORS.includes(value as UpscaleScaleFactor);
+}
+
 export const createGenerateJobSchema = z.object({
   operation: z.literal("GENERATE"),
   projectId: z.string().uuid(),
@@ -12,5 +19,13 @@ export const createRemoveBackgroundJobSchema = z.object({
   assetId: z.string().uuid(),
 });
 
+export const createUpscaleJobSchema = z.object({
+  operation: z.literal("UPSCALE"),
+  projectId: z.string().uuid(),
+  assetId: z.string().uuid(),
+  scaleFactor: z.union([z.literal(2), z.literal(3), z.literal(4)]),
+});
+
 export type CreateGenerateJobInput = z.infer<typeof createGenerateJobSchema>;
 export type CreateRemoveBackgroundJobInput = z.infer<typeof createRemoveBackgroundJobSchema>;
+export type CreateUpscaleJobInput = z.infer<typeof createUpscaleJobSchema>;

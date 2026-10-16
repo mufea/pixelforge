@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { ConvertForm } from "@/components/assets/convert-form";
 import { RemoveBackgroundButton } from "@/components/assets/remove-background-button";
+import { UpscaleButton } from "@/components/assets/upscale-button";
 import { deleteAssetAction } from "@/lib/actions/assets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,11 +28,15 @@ export function AssetGrid({
   assets,
   removeBackgroundAvailable = false,
   removeBackgroundUnavailableReason = null,
+  upscaleAvailable = false,
+  upscaleUnavailableReason = null,
 }: {
   projectId: string;
   assets: AssetCard[];
   removeBackgroundAvailable?: boolean;
   removeBackgroundUnavailableReason?: string | null;
+  upscaleAvailable?: boolean;
+  upscaleUnavailableReason?: string | null;
 }) {
   if (assets.length === 0) {
     return (
@@ -53,6 +58,8 @@ export function AssetGrid({
           asset={asset}
           removeBackgroundAvailable={removeBackgroundAvailable}
           removeBackgroundUnavailableReason={removeBackgroundUnavailableReason}
+          upscaleAvailable={upscaleAvailable}
+          upscaleUnavailableReason={upscaleUnavailableReason}
         />
       ))}
     </div>
@@ -64,11 +71,15 @@ function AssetCardView({
   asset,
   removeBackgroundAvailable,
   removeBackgroundUnavailableReason,
+  upscaleAvailable,
+  upscaleUnavailableReason,
 }: {
   projectId: string;
   asset: AssetCard;
   removeBackgroundAvailable: boolean;
   removeBackgroundUnavailableReason: string | null;
+  upscaleAvailable: boolean;
+  upscaleUnavailableReason: string | null;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -131,6 +142,12 @@ function AssetCardView({
           assetId={asset.id}
           available={removeBackgroundAvailable}
           unavailableReason={removeBackgroundUnavailableReason}
+        />
+        <UpscaleButton
+          projectId={projectId}
+          assetId={asset.id}
+          available={upscaleAvailable}
+          unavailableReason={upscaleUnavailableReason}
         />
         <ConvertForm assetId={asset.id} currentMime={asset.mimeType} />
       </CardContent>

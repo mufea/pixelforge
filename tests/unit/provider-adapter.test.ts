@@ -51,6 +51,10 @@ describe("provider adapter architecture", () => {
         providerId: "mock",
         modelId: "mock-bg-remove",
       });
+      expect(resolveProvider("UPSCALE")).toEqual({
+        providerId: "mock",
+        modelId: "mock-upscale",
+      });
     });
 
     it("selects OpenAI when requested explicitly and configured", () => {
@@ -124,6 +128,24 @@ describe("provider adapter architecture", () => {
       });
     });
 
+    it("fails closed in live mode when no upscale provider is configured", () => {
+      liveEnv();
+      try {
+        resolveProvider("UPSCALE");
+        throw new Error("expected failure");
+      } catch (error) {
+        expect(error).toMatchObject({ code: "PROVIDER_NOT_CONFIGURED", status: 503 });
+      }
+    });
+
+    it("selects Fal for upscale when configured", () => {
+      liveEnv({ FAL_KEY: "fal_sk_test_not_real" });
+      expect(resolveProvider("UPSCALE")).toEqual({
+        providerId: "fal",
+        modelId: "fal-ai/flux-vision-upscaler",
+      });
+    });
+
     it("rejects Fal when FAL_KEY is missing", () => {
       liveEnv();
       expect(() => resolveProvider("REMOVE_BACKGROUND", { providerId: "fal" })).toThrow(DomainError);
@@ -188,7 +210,7 @@ describe("provider adapter architecture", () => {
     it("returns MODEL_DISABLED for catalog stubs that are not implemented yet", () => {
       liveEnv({ FAL_KEY: "fal_sk_test_not_real" });
       try {
-        resolveProvider("UPSCALE", { providerId: "fal" });
+        resolveProvider("REMOVE_OBJECT", { providerId: "fal" });
         throw new Error("expected failure");
       } catch (error) {
         expect(error).toMatchObject({ code: "MODEL_DISABLED" });
@@ -248,7 +270,7 @@ describe("provider adapter architecture", () => {
     it("does not call fetch from Fal or Google stubs", () => {
       const fetchSpy = vi.fn();
       vi.stubGlobal("fetch", fetchSpy);
-      expect(() => falUnimplemented("UPSCALE")).toThrow(DomainError);
+      expect(() => falUnimplemented("EDIT")).toThrow(DomainError);
       expect(() => googleUnimplemented("GENERATE")).toThrow(DomainError);
       expect(fetchSpy).not.toHaveBeenCalled();
     });

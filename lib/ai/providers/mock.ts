@@ -1,6 +1,7 @@
 import sharp from "sharp";
 import { normalizeProviderError } from "@/lib/ai/errors";
-import type { GenerateInput, ProviderResult, RemoveBackgroundInput } from "@/lib/ai/types";
+import type { GenerateInput, ProviderResult, RemoveBackgroundInput, UpscaleInput } from "@/lib/ai/types";
+import { DomainError } from "@/lib/errors";
 
 function throwIfAborted(signal?: AbortSignal) {
   if (signal?.aborted) {
@@ -68,5 +69,33 @@ export async function mockRemoveBackground(
     providerRequestId: `mock-bg-${info.width}x${info.height}`,
     latencyMs: Date.now() - started,
     rawModel: "mock-bg-remove",
+  };
+}
+
+export async function mockUpscale(input: UpscaleInput, signal?: AbortSignal): Promise<ProviderResult> {
+  throwIfAborted(signal);
+  if (input.scaleFactor !== 2 && input.scaleFactor !== 3 && input.scaleFactor !== 4) {
+    throw new DomainError("UNSUPPORTED_UPSCALE_FACTOR", "Upscale factor must be 2, 3, or 4");
+  }
+
+  const started = Date.now();
+  const metadata = await sharp(input.image, { failOn: "error" }).metadata();
+  const width = (metadata.width ?? 0) * input.scaleFactor;
+  const height = (metadata.height ?? 0) * input.scaleFactor;
+  if (width < 1 || height < 1) {
+    throw new DomainError("VALIDATION_INVALID_SIGNATURE", "The source file is not a JPEG, PNG, or WebP image");
+  }
+
+  const bytes = await sharp(input.image, { failOn: "error" })
+    .resize(width, height, { kernel: "nearest" })
+    .png()
+    .toBuffer();
+  throwIfAborted(signal);
+
+  return {
+    images: [{ bytes, mimeType: "image/png", width, height }],
+    providerRequestId: `mock-upscale-${input.scaleFactor}x`,
+    latencyMs: Date.now() - started,
+    rawModel: "mock-upscale",
   };
 }

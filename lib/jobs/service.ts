@@ -7,7 +7,12 @@ import { getEnv } from "@/lib/env";
 import { DomainError, notFound } from "@/lib/errors";
 import { enqueueJob } from "@/lib/jobs/queue";
 import { getOwnedProject } from "@/lib/projects/service";
-import { createGenerateJobSchema, createRemoveBackgroundJobSchema } from "@/lib/validators/job";
+import { assertResizeWithinLimits } from "@/lib/images/transform";
+import {
+  createGenerateJobSchema,
+  createRemoveBackgroundJobSchema,
+  createUpscaleJobSchema,
+} from "@/lib/validators/job";
 
 export async function createGenerateJob(userId: string, input: unknown) {
   const env = getEnv();
@@ -97,9 +102,77 @@ export async function createRemoveBackgroundJob(userId: string, input: unknown) 
   return job;
 }
 
+export async function createUpscaleJob(userId: string, input: unknown) {
+  const env = getEnv();
+  if (!env.AI_JOBS_ENABLED) {
+    throw new DomainError("AI_JOBS_DISABLED", "AI jobs are temporarily disabled", 503);
+  }
+
+  const parsed = createUpscaleJobSchema.safeParse(input);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    if (issue?.path[0] === "scaleFactor") {
+      throw new DomainError("UNSUPPORTED_UPSCALE_FACTOR", "Upscale factor must be 2, 3, or 4");
+    }
+    throw new DomainError("VALIDATION", issue?.message ?? "Invalid job");
+  }
+
+  await getOwnedProject(userId, parsed.data.projectId);
+  const source = await getOwnedAsset(userId, parsed.data.assetId);
+  if (source.projectId !== parsed.data.projectId) {
+    notFound("Asset not found");
+  }
+  if (!isAllowedImageMime(source.mimeType)) {
+    throw new DomainError("VALIDATION_INVALID_MIME", "Only JPEG, PNG, and WebP images can be upscaled");
+  }
+  if (source.byteSize > env.MAX_UPLOAD_BYTES) {
+    throw new DomainError("VALIDATION_FILE_TOO_LARGE", "The source file exceeds the size limit");
+  }
+
+  const scaleFactor = parsed.data.scaleFactor;
+  assertResizeWithinLimits(source.width * scaleFactor, source.height * scaleFactor, {
+    maxUploadBytes: env.MAX_UPLOAD_BYTES,
+    maxImagePixels: env.MAX_IMAGE_PIXELS,
+    maxImageEdgePx: env.MAX_IMAGE_EDGE_PX,
+  });
+  await assertWithinQuota(userId, source.byteSize * scaleFactor * scaleFactor);
+  const provider = resolveProvider("UPSCALE");
+  const timeoutMs = env.JOB_DEFAULT_TIMEOUT_MS;
+
+  const job = await prisma.aIJob.create({
+    data: {
+      userId,
+      projectId: parsed.data.projectId,
+      operation: "UPSCALE",
+      status: "queued",
+      providerId: provider.providerId,
+      modelId: provider.modelId,
+      inputJson: {
+        projectId: parsed.data.projectId,
+        assetId: source.id,
+        inputAssetIds: [source.id],
+        scaleFactor,
+      },
+      timeoutAt: new Date(Date.now() + timeoutMs),
+    },
+  });
+
+  await prisma.aIJobEvent.create({
+    data: { jobId: job.id, fromStatus: null, toStatus: "queued", attempt: 0 },
+  });
+
+  await enqueueJob(job.id);
+  return job;
+}
+
 export async function createStudioJob(userId: string, input: unknown) {
-  if (typeof input === "object" && input !== null && "operation" in input && input.operation === "REMOVE_BACKGROUND") {
-    return createRemoveBackgroundJob(userId, input);
+  if (typeof input === "object" && input !== null && "operation" in input) {
+    if (input.operation === "REMOVE_BACKGROUND") {
+      return createRemoveBackgroundJob(userId, input);
+    }
+    if (input.operation === "UPSCALE") {
+      return createUpscaleJob(userId, input);
+    }
   }
   return createGenerateJob(userId, input);
 }

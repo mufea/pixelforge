@@ -64,6 +64,6 @@ No new Prisma migration.
 ## Limitations / deferred
 
 - Live Fal smoke (not run; no approval to spend Fal credits)
-- AI upscale (4.3), edit / object removal (4.4), credits (4.6)
+- AI upscale (4.3 — implemented separately; see [PHASE_4_3.md](./PHASE_4_3.md)), edit / object removal (4.4), credits (4.6)
 - CONVERT as a BullMQ job
 - `Provider` / `AIModel` tables
