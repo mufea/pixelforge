@@ -33,6 +33,7 @@ const envSchema = z.object({
   OPENAI_API_KEY: optionalString,
   GOOGLE_AI_API_KEY: optionalString,
   FAL_KEY: optionalString,
+  FAL_API_KEY: optionalString,
   STRIPE_SECRET_KEY: optionalString,
   STRIPE_WEBHOOK_SECRET: optionalString,
   STRIPE_PUBLISHABLE_KEY: optionalString,
@@ -82,7 +83,10 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   if (env.NODE_ENV === "production" && env.AI_PROVIDER_MODE === "mock") {
     throw new Error("AI_PROVIDER_MODE=mock is not allowed in production");
   }
-  return env;
+  return {
+    ...env,
+    FAL_KEY: env.FAL_KEY ?? env.FAL_API_KEY,
+  };
 }
 
 export function getEnv(): AppEnv {
@@ -100,6 +104,10 @@ export function isGoogleOAuthConfigured(
 
 export function isOpenAIConfigured(env: Pick<AppEnv, "OPENAI_API_KEY"> = getEnv()): boolean {
   return Boolean(env.OPENAI_API_KEY);
+}
+
+export function isFalConfigured(env: Pick<AppEnv, "FAL_KEY"> = getEnv()): boolean {
+  return Boolean(env.FAL_KEY);
 }
 
 export function isMockAiAllowed(env: AppEnv = getEnv()): boolean {

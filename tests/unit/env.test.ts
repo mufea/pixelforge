@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isGoogleOAuthConfigured, isMockAiAllowed, isS3Configured, loadEnv } from "@/lib/env";
+import { isFalConfigured, isGoogleOAuthConfigured, isMockAiAllowed, isS3Configured, loadEnv } from "@/lib/env";
 
 const required = {
   APP_URL: "http://127.0.0.1:43127",
@@ -49,6 +49,15 @@ describe("environment parsing", () => {
       S3_ACCESS_KEY_ID: "minioadmin",
     });
     expect(isS3Configured(env)).toBe(false);
+  });
+
+  it("accepts FAL_API_KEY as an alias for FAL_KEY", () => {
+    const env = loadEnv({
+      ...required,
+      FAL_API_KEY: "fal_sk_test_alias",
+    });
+    expect(env.FAL_KEY).toBe("fal_sk_test_alias");
+    expect(isFalConfigured(env)).toBe(true);
   });
 
   it("requires a long Better Auth secret", () => {
