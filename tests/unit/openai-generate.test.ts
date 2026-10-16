@@ -24,6 +24,18 @@ describe("openai generate adapter", () => {
     });
   });
 
+  it("maps provider 429 to PROVIDER_RATE_LIMITED", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "sk-test-not-real");
+    resetEnvCache();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("slow down", { status: 429 })),
+    );
+    await expect(openaiGenerate({ prompt: "a mug" }, AbortSignal.timeout(1000))).rejects.toMatchObject({
+      code: "PROVIDER_RATE_LIMITED",
+    });
+  });
+
   it("maps provider 5xx to PROVIDER_UNAVAILABLE", async () => {
     vi.stubEnv("OPENAI_API_KEY", "sk-test-not-real");
     resetEnvCache();

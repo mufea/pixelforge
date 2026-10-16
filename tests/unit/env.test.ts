@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isFalConfigured, isGoogleOAuthConfigured, isMockAiAllowed, isS3Configured, loadEnv } from "@/lib/env";
+import {
+  isFalConfigured,
+  isGoogleAiConfigured,
+  isGoogleOAuthConfigured,
+  isMockAiAllowed,
+  isS3Configured,
+  loadEnv,
+} from "@/lib/env";
 
 const required = {
   APP_URL: "http://127.0.0.1:43127",
@@ -49,6 +56,14 @@ describe("environment parsing", () => {
       S3_ACCESS_KEY_ID: "minioadmin",
     });
     expect(isS3Configured(env)).toBe(false);
+  });
+
+  it("treats blank Google AI keys as unconfigured", () => {
+    const env = loadEnv({
+      ...required,
+      GOOGLE_AI_API_KEY: "",
+    });
+    expect(isGoogleAiConfigured(env)).toBe(false);
   });
 
   it("accepts FAL_API_KEY as an alias for FAL_KEY", () => {

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { DomainError, notFound } from "@/lib/errors";
-import { resolveGenerateProvider } from "@/lib/ai/generate";
+import { resolveProvider } from "@/lib/ai/generate";
 import { getOwnedProject } from "@/lib/projects/service";
 import { enqueueJob } from "@/lib/jobs/queue";
 import { createGenerateJobSchema } from "@/lib/validators/job";
@@ -18,7 +18,7 @@ export async function createGenerateJob(userId: string, input: unknown) {
   }
 
   await getOwnedProject(userId, parsed.data.projectId);
-  const providerId = resolveGenerateProvider();
+  const provider = resolveProvider("GENERATE");
   const timeoutMs = env.JOB_DEFAULT_TIMEOUT_MS;
 
   const job = await prisma.aIJob.create({
@@ -27,8 +27,8 @@ export async function createGenerateJob(userId: string, input: unknown) {
       projectId: parsed.data.projectId,
       operation: "GENERATE",
       status: "queued",
-      providerId,
-      modelId: providerId === "mock" ? "mock-png" : "gpt-image-2.5-flare",
+      providerId: provider.providerId,
+      modelId: provider.modelId,
       inputJson: { prompt: parsed.data.prompt, projectId: parsed.data.projectId },
       timeoutAt: new Date(Date.now() + timeoutMs),
     },

@@ -1,12 +1,11 @@
 import { prisma } from "@/lib/db";
-import { getEnv } from "@/lib/env";
-import { DomainError } from "@/lib/errors";
-import { runGenerate } from "@/lib/ai/generate";
+import { isRetryableProviderCode, isRetryableProviderError } from "@/lib/ai/errors";
+import { getProviderTimeoutMs, resolveProvider, runGenerate } from "@/lib/ai/factory";
+import { isImageOperation } from "@/lib/ai/types";
 import { persistDerivedAsset } from "@/lib/assets/persist";
 import { filenameForMime } from "@/lib/assets/mime";
+import { DomainError } from "@/lib/errors";
 import { logger } from "@/lib/logging";
-
-const RETRYABLE = new Set(["PROVIDER_RATE_LIMITED", "PROVIDER_UNAVAILABLE"]);
 
 export async function processJob(jobId: string) {
   const existing = await prisma.aIJob.findUnique({ where: { id: jobId } });
@@ -16,7 +15,7 @@ export async function processJob(jobId: string) {
   if (existing.status === "succeeded" || existing.status === "cancelled") {
     return existing;
   }
-  if (existing.status === "failed" && existing.errorCode && !RETRYABLE.has(existing.errorCode)) {
+  if (existing.status === "failed" && existing.errorCode && !isRetryableProviderCode(existing.errorCode)) {
     return existing;
   }
   if (
@@ -57,15 +56,22 @@ export async function processJob(jobId: string) {
 
   try {
     if (job.operation !== "GENERATE") {
-      throw new DomainError("VALIDATION", "Unsupported job operation");
+      throw new DomainError(
+        isImageOperation(job.operation) ? "MODEL_CAPABILITY_UNSUPPORTED" : "VALIDATION",
+        "Unsupported job operation",
+        400,
+      );
     }
     const reused = await reuseExistingOutput(jobId);
     if (reused) {
       return reused;
     }
+    const provider = resolveProvider("GENERATE", { providerId: job.providerId, modelId: job.modelId });
     const prompt = readPrompt(job.inputJson);
-    const env = getEnv();
-    const result = await runGenerate({ prompt }, AbortSignal.timeout(env.OPENAI_TIMEOUT_MS));
+    const result = await runGenerate({ prompt }, AbortSignal.timeout(getProviderTimeoutMs(provider.providerId)), {
+      providerId: provider.providerId,
+      modelId: provider.modelId,
+    });
     const image = result.images[0];
     if (!image) {
       throw new DomainError("PROVIDER_REJECTED", "The image provider returned no image");
@@ -111,7 +117,7 @@ export async function processJob(jobId: string) {
   } catch (error) {
     const code = error instanceof DomainError ? error.code : "JOB_FAILED";
     const message = error instanceof DomainError ? error.message : "The job failed";
-    const retryable = RETRYABLE.has(code);
+    const retryable = isRetryableProviderError(error) || isRetryableProviderCode(code);
     logger.error({ jobId, code }, "Job processing failed");
 
     if (retryable && job.attemptCount < 3) {

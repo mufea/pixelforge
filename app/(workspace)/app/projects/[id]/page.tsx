@@ -10,7 +10,7 @@ import { GeneratePanel } from "@/components/jobs/generate-panel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createDownloadUrl, listProjectAssets } from "@/lib/assets/service";
 import { requireUser } from "@/lib/auth/session";
-import { getEnv, isMockAiAllowed, isOpenAIConfigured } from "@/lib/env";
+import { generateUnavailableReason, isGenerateAvailable } from "@/lib/ai/generate";
 import { DomainError } from "@/lib/errors";
 import { listProjectJobs, publicJob } from "@/lib/jobs/service";
 import { getOwnedProject } from "@/lib/projects/service";
@@ -31,8 +31,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     throw error;
   }
 
-  const env = getEnv();
-  const generateAvailable = env.AI_JOBS_ENABLED && (isMockAiAllowed(env) || isOpenAIConfigured(env));
+  const generateAvailable = isGenerateAvailable();
   const [assets, jobs] = await Promise.all([
     listProjectAssets(session.user.id, project.id),
     listProjectJobs(session.user.id, project.id),
@@ -100,11 +99,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             projectId={project.id}
             initialJobs={jobs.map(publicJob)}
             available={generateAvailable}
-            unavailableReason={
-              generateAvailable
-                ? null
-                : "OpenAI is not configured. Set OPENAI_API_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests."
-            }
+            unavailableReason={generateUnavailableReason()}
           />
         </CardContent>
       </Card>

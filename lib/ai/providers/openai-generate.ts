@@ -1,39 +1,38 @@
-import { getEnv, isOpenAIConfigured } from "@/lib/env";
-import { DomainError } from "@/lib/errors";
+import "server-only";
+
+import { getOpenAICredentials } from "@/lib/ai/config";
+import { domainErrorFromProviderResponse, normalizeProviderError } from "@/lib/ai/errors";
 import type { GenerateInput, ProviderResult } from "@/lib/ai/types";
+import { DomainError } from "@/lib/errors";
 
 const OPENAI_MODEL = "gpt-image-2.5-flare";
 
 export async function openaiGenerate(input: GenerateInput, signal: AbortSignal): Promise<ProviderResult> {
-  const env = getEnv();
-  if (!isOpenAIConfigured(env)) {
-    throw new DomainError("PROVIDER_NOT_CONFIGURED", "OpenAI image generation is not configured", 503);
-  }
-
+  const credentials = getOpenAICredentials();
   const started = Date.now();
-  const response = await fetch(`${env.OPENAI_BASE_URL.replace(/\/$/, "")}/images/generations`, {
-    method: "POST",
-    signal,
-    headers: {
-      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      prompt: input.prompt,
-      size: "1024x1024",
-      n: 1,
-    }),
-  });
 
-  if (response.status === 429) {
-    throw new DomainError("PROVIDER_RATE_LIMITED", "The image provider is rate limited", 429);
+  let response: Response;
+  try {
+    response = await fetch(`${credentials.baseUrl.replace(/\/$/, "")}/images/generations`, {
+      method: "POST",
+      signal,
+      headers: {
+        Authorization: `Bearer ${credentials.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        prompt: input.prompt,
+        size: "1024x1024",
+        n: 1,
+      }),
+    });
+  } catch (error) {
+    throw normalizeProviderError(error);
   }
-  if (response.status >= 500) {
-    throw new DomainError("PROVIDER_UNAVAILABLE", "The image provider is unavailable", 503);
-  }
+
   if (!response.ok) {
-    throw new DomainError("PROVIDER_REJECTED", await providerErrorMessage(response), 502);
+    throw await domainErrorFromProviderResponse(response);
   }
 
   const payload = (await response.json()) as {
@@ -52,19 +51,6 @@ export async function openaiGenerate(input: GenerateInput, signal: AbortSignal):
     latencyMs: Date.now() - started,
     rawModel: OPENAI_MODEL,
   };
-}
-
-async function providerErrorMessage(response: Response) {
-  try {
-    const payload = (await response.json()) as { error?: { message?: unknown } };
-    const message = payload.error?.message;
-    if (typeof message === "string" && message.trim().length > 0) {
-      return message.trim().slice(0, 280);
-    }
-  } catch {
-    // Fall through to the generic message; never include credentials or raw bodies.
-  }
-  return "The image provider rejected the request";
 }
 
 export { OPENAI_MODEL };

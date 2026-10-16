@@ -4,6 +4,8 @@ Credit-metered AI image studio: generation, editing, enhancement, conversion, pr
 
 Phase 3 is live: authentication, owned projects, private uploads, PNG/JPEG/WebP conversion (original preserved), and asynchronous generate jobs. Live OpenAI generate has been verified in this environment. If `OPENAI_API_KEY` is unset, the API returns `PROVIDER_NOT_CONFIGURED` rather than a fake image. Credits and payments are not implemented.
 
+Phase 4.5 adds a provider-independent adapter layer (in-code registry, factory, mock provider, normalized errors). Sharp conversion stays independent of AI providers. Fal/Google adapters are stubs and do not make live API calls.
+
 ## Requirements
 
 - Node.js 22 and pnpm 10
@@ -59,5 +61,5 @@ See `docs/` for architecture, database, providers, billing, security, deployment
 | Post-test audit | Complete — see docs/POST_TEST_AUDIT.md |
 | 2 Projects and assets | PASS |
 | 3 Converter and first AI job | PASS (live OpenAI generate verified) |
-| 4 AI image studio | 4.1 PASS (batch convert/resize/crop). 4.2–4.6 not started. |
+| 4 AI image studio | 4.1 PASS (batch convert/resize/crop). 4.5 PASS (provider adapters). 4.2–4.4 and 4.6 not started. |
 | 5–7 | Not started |

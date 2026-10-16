@@ -1,7 +1,12 @@
 import sharp from "sharp";
+import { normalizeProviderError } from "@/lib/ai/errors";
 import type { GenerateInput, ProviderResult } from "@/lib/ai/types";
 
-export async function mockGenerate(input: GenerateInput): Promise<ProviderResult> {
+export async function mockGenerate(input: GenerateInput, signal?: AbortSignal): Promise<ProviderResult> {
+  if (signal?.aborted) {
+    throw normalizeProviderError(signal.reason ?? Object.assign(new Error("The operation was aborted"), { name: "TimeoutError" }));
+  }
+
   const started = Date.now();
   const bytes = await sharp({
     create: {
@@ -13,6 +18,10 @@ export async function mockGenerate(input: GenerateInput): Promise<ProviderResult
   })
     .png()
     .toBuffer();
+
+  if (signal?.aborted) {
+    throw normalizeProviderError(signal.reason ?? Object.assign(new Error("The operation was aborted"), { name: "TimeoutError" }));
+  }
 
   return {
     images: [{ bytes, mimeType: "image/png", width: 32, height: 32 }],

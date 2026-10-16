@@ -1,8 +1,10 @@
 # AI provider integration
 
-Adapters sit behind operation interfaces. The UI and job worker never call vendor SDKs directly. Model identifiers, sizes, and capabilities are stored in the registry and validated before enqueue.
+Adapters sit behind operation interfaces. The UI and job worker never call vendor SDKs directly. Model identifiers, sizes, and capabilities are stored in the in-code registry (`lib/ai/registry.ts`) and validated before enqueue. Provider / AIModel database tables remain deferred; disabling a catalog row is `enabled: false` in code until a later slice adds those tables.
 
 Live HTTP calls happen only when the matching server-side API key is set **and** `AI_PROVIDER_MODE` is not `mock`. Mock adapters are compiled for tests and for development when `AI_PROVIDER_MODE=mock` (ignored in production). A passing mock test does not verify a real integration.
+
+Phase 4.5 shipped the registry, factory, normalized errors, and centralized secret access. Sharp convert/resize/crop stays in `lib/images` and is not an AI provider. Fal and Google adapters are stubs that do not open network connections. Do not implement background removal, upscale, or edit until those slices are approved.
 
 Sources checked on 14 October 2026:
 

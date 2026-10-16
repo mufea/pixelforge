@@ -60,6 +60,9 @@ const envSchema = z.object({
   JOB_DEFAULT_TIMEOUT_MS: z.coerce.number().int().positive().default(180_000),
   OPENAI_BASE_URL: z.string().default("https://api.openai.com/v1"),
   OPENAI_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  GOOGLE_AI_BASE_URL: z.string().default("https://generativelanguage.googleapis.com"),
+  GOOGLE_AI_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  FAL_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   AI_JOBS_ENABLED: z
     .enum(["true", "false"])
     .optional()
@@ -108,6 +111,10 @@ export function isOpenAIConfigured(env: Pick<AppEnv, "OPENAI_API_KEY"> = getEnv(
 
 export function isFalConfigured(env: Pick<AppEnv, "FAL_KEY"> = getEnv()): boolean {
   return Boolean(env.FAL_KEY);
+}
+
+export function isGoogleAiConfigured(env: Pick<AppEnv, "GOOGLE_AI_API_KEY"> = getEnv()): boolean {
+  return Boolean(env.GOOGLE_AI_API_KEY);
 }
 
 export function isMockAiAllowed(env: AppEnv = getEnv()): boolean {
