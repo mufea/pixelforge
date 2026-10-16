@@ -17,14 +17,18 @@ function redis() {
 }
 
 export function jobsQueueName() {
-  return `${getEnv().QUEUE_PREFIX}:jobs`;
+  return "jobs";
+}
+
+function queueOptions(connection: IORedis) {
+  return { connection, prefix: getEnv().QUEUE_PREFIX };
 }
 
 export async function enqueueJob(jobId: string) {
   const env = getEnv();
   const conn = redis();
   if (conn && env.NODE_ENV !== "test") {
-    queue ??= new Queue(jobsQueueName(), { connection: conn });
+    queue ??= new Queue(jobsQueueName(), queueOptions(conn));
     await queue.add("process", { jobId }, { jobId, attempts: 3, backoff: { type: "exponential", delay: 2000 } });
     return;
   }
@@ -48,6 +52,6 @@ export function startJobWorker() {
       const jobId = String(job.data.jobId ?? "");
       await processJob(jobId);
     },
-    { connection: conn, concurrency: 2 },
+    { ...queueOptions(conn), concurrency: 2 },
   );
 }

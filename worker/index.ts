@@ -1,3 +1,4 @@
+import "./load-env";
 import { getEnv } from "../lib/env";
 import { logger } from "../lib/logging";
 import { startJobWorker } from "../lib/jobs/queue";

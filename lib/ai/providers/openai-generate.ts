@@ -33,7 +33,7 @@ export async function openaiGenerate(input: GenerateInput, signal: AbortSignal):
     throw new DomainError("PROVIDER_UNAVAILABLE", "The image provider is unavailable", 503);
   }
   if (!response.ok) {
-    throw new DomainError("PROVIDER_REJECTED", "The image provider rejected the request", 502);
+    throw new DomainError("PROVIDER_REJECTED", await providerErrorMessage(response), 502);
   }
 
   const payload = (await response.json()) as {
@@ -52,6 +52,19 @@ export async function openaiGenerate(input: GenerateInput, signal: AbortSignal):
     latencyMs: Date.now() - started,
     rawModel: OPENAI_MODEL,
   };
+}
+
+async function providerErrorMessage(response: Response) {
+  try {
+    const payload = (await response.json()) as { error?: { message?: unknown } };
+    const message = payload.error?.message;
+    if (typeof message === "string" && message.trim().length > 0) {
+      return message.trim().slice(0, 280);
+    }
+  } catch {
+    // Fall through to the generic message; never include credentials or raw bodies.
+  }
+  return "The image provider rejected the request";
 }
 
 export { OPENAI_MODEL };
