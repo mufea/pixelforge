@@ -1,8 +1,8 @@
 # Phase 3 — Image converter and first AI job
 
-**Result: PASS** (16 October 2026) for the converter, job workflow, mock generate tests, and live `PROVIDER_NOT_CONFIGURED` behavior.
+**Result: PASS** (16 October 2026) for the converter, job workflow, mock generate tests, fail-closed behavior when no provider is configured, and a later live OpenAI generate.
 
-Live OpenAI generation is **not claimed**. `OPENAI_API_KEY` is unset in this environment. The adapter and worker are in place; a real image is not produced until a key is supplied.
+Live OpenAI generation **succeeded** after a server-side `OPENAI_API_KEY` was supplied. That result supersedes earlier statements that live generation was blocked. The key is not stored in the repository.
 
 D1–D10 remain in force. Auth and storage were not rewritten.
 
@@ -14,7 +14,7 @@ Phase 2 already owned projects, assets, magic-byte validation, quotas, and signe
 
 **No blockers for the converter.** Redis was reachable (`PONG`) for the job queue.
 
-**Blocker for live generate:** `OPENAI_API_KEY` is empty and `AI_PROVIDER_MODE=live`. Mock generate is forbidden in this mode. Enqueue returns `PROVIDER_NOT_CONFIGURED` (HTTP 503) instead of a fake image.
+**Historical blocker (resolved the same day):** at first inspection, `OPENAI_API_KEY` was empty and `AI_PROVIDER_MODE=live`. Mock generate is forbidden in that mode, so enqueue returned `PROVIDER_NOT_CONFIGURED` (HTTP 503) instead of a fake image. After the key was configured on the server, a live generate job succeeded.
 
 ## Converter
 
@@ -44,7 +44,7 @@ Phase 2 already owned projects, assets, magic-byte validation, quotas, and signe
 | `pnpm exec prisma migrate status` | Applied `20261016012526_phase3_convert_and_jobs` |
 | `pnpm lint` | Pass |
 | `pnpm typecheck` | Pass |
-| `pnpm test` | 52 passed (13 files) |
+| `pnpm test` | 52 passed (13 files) at first close; 53 passed after the `FAL_API_KEY` env alias |
 | `pnpm build` | Pass — includes `/api/assets/[id]/convert`, `/api/jobs`, `/api/jobs/[id]` |
 
 ## Tests added
@@ -70,11 +70,24 @@ Signed in as `user@pixelforge.local` against PNG `11fc29ba-…` on project `0532
 | `POST /api/assets/:id/convert` PNG → JPEG | HTTP 201, new `DERIVATIVE` `d6b2a000-…`, original PNG still alive |
 | Owner download of converted JPEG | HTTP 200 signed `/api/storage/objects` URL; 328 bytes, JPEG magic |
 | `outputFormat: image/avif` | HTTP 400 `UNSUPPORTED_OUTPUT_FORMAT` |
-| `POST /api/jobs` GENERATE | HTTP 503 `PROVIDER_NOT_CONFIGURED` |
+| `POST /api/jobs` GENERATE (no provider key yet) | HTTP 503 `PROVIDER_NOT_CONFIGURED` |
 | Unauthenticated convert | HTTP 401 |
 | Admin convert/download of the user's asset | HTTP 404 |
 | Unauthenticated `/app/projects/:id` | HTTP 307 to `/login` |
-| Project page | "Convert to", "Generation is not live", "OpenAI is not configured" |
+| Project page (before the key) | "Convert to", "Generation is not live", "OpenAI is not configured" |
+
+### Live OpenAI generate (later the same day)
+
+After `OPENAI_API_KEY` was set in gitignored server env (`AI_PROVIDER_MODE=live`), signed in as the seed user:
+
+| Check | Result |
+| --- | --- |
+| `POST /api/jobs` GENERATE | HTTP 201 queued, `providerId: openai`, model `gpt-image-2.5-flare` |
+| Job lifecycle | queued → processing → **succeeded** in about 10 seconds |
+| Output asset | private `GENERATED` PNG, 1024×1024, about 1.4 MB, PNG magic bytes |
+| Owner download | HTTP 200 short-lived signed object URL (not a public bucket URL) |
+| Admin job and asset access | HTTP 404 |
+| Project page | **Generate image** is shown; “Generation is not live” is gone |
 
 ## Limitations
 
@@ -86,6 +99,6 @@ Signed in as `user@pixelforge.local` against PNG `11fc29ba-…` on project `0532
 
 ## Blockers
 
-`OPENAI_API_KEY` is not set. Do not invent a key or enable mock in live mode. Converter and mock-tested jobs are ready for Phase 4 after this report is accepted.
+None that prevent Phase 4 planning. Live OpenAI generate is verified. Fal credentials exist in gitignored env as `FAL_KEY` / `FAL_API_KEY`, but no Fal adapter is implemented (Phase 4). Google image generation is still unconfigured.
 
-Phase 4 must not start until this report is accepted.
+Phase 4 feature work must not start until `docs/PHASE_4_PLAN.md` is reviewed and approved.

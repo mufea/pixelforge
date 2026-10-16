@@ -130,5 +130,5 @@ Marketing text overlays are composed deterministically (SVG/Sharp), not by askin
 
 ## Phase 3 vs Phase 4
 
-- Phase 3 (shipped): Sharp conversion + OpenAI generate adapter + mock adapter tests + BullMQ worker. Live generate is `PROVIDER_NOT_CONFIGURED` until `OPENAI_API_KEY` is set.
+- Phase 3 (shipped): Sharp conversion + OpenAI generate adapter + mock adapter tests + BullMQ worker. Live OpenAI generate has been verified. Without a key, enqueue is `PROVIDER_NOT_CONFIGURED` rather than a fake image.
 - Phase 4: edit, background removal, upscale, object removal, product and marketing studios, Google and Fal adapters behind the same interfaces.

@@ -1,6 +1,6 @@
 # Implementation plan
 
-Phase 0 is **PASS**. Decisions D1–D10 were approved on 14 October 2026. Phase 1 is **PASS**. A post-test code audit is in [POST_TEST_AUDIT.md](./POST_TEST_AUDIT.md). Phase 2 is **PASS**. Phase 3 is **PASS** for conversion, job workflow, and mock generate tests. Live OpenAI generate is blocked on a missing `OPENAI_API_KEY`.
+Phase 0 is **PASS**. Decisions D1–D10 were approved on 14 October 2026. Phase 1 is **PASS**. A post-test code audit is in [POST_TEST_AUDIT.md](./POST_TEST_AUDIT.md). Phase 2 is **PASS**. Phase 3 is **PASS**, including a verified live OpenAI generate. Phase 4 is planning only — see [PHASE_4_PLAN.md](./PHASE_4_PLAN.md).
 
 ## Decisions (approved)
 
@@ -89,7 +89,7 @@ Tests: tenant isolation, MIME/signature rejection, oversized image, quota.
 
 ## Phase 3 — Image processing and first AI job
 
-**Status: PASS (16 October 2026)** — converter, mock jobs, and live not-configured generate. See [PHASE_3.md](./PHASE_3.md). Live OpenAI generate remains blocked until `OPENAI_API_KEY` is set.
+**Status: PASS (16 October 2026)** — converter, mock jobs, fail-closed generate when unconfigured, and live OpenAI generate after a server key was set. See [PHASE_3.md](./PHASE_3.md).
 
 Scope:
 
@@ -115,6 +115,8 @@ Tests: Sharp conversion, job transitions, retry backoff, timeout mapping, mock a
 **Blocker rule:** if OpenAI cannot be reached, keep the adapter and tests, document the blocker, continue with Sharp + mock.
 
 ## Phase 4 — AI image studio
+
+**Status: PLANNING** — see [PHASE_4_PLAN.md](./PHASE_4_PLAN.md). Do not implement until that plan is approved.
 
 Scope: generator, editor (incl. mask when capable), background remover, upscaler, object remover, variations, product studio, marketing studio (Sharp text overlay), converter UI. Google + Fal adapters. Registry-driven model picker.
 
