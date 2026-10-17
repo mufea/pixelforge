@@ -80,6 +80,17 @@ export const auth = betterAuth({
               displayName: user.name,
             },
           });
+          await prisma.creditAccount.upsert({
+            where: { userId: user.id },
+            update: {},
+            create: {
+              userId: user.id,
+              availableCredits: 0,
+              reservedCredits: 0,
+              lifetimeGranted: 0,
+              lifetimeConsumed: 0,
+            },
+          });
         },
       },
     },

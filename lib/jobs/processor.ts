@@ -11,7 +11,7 @@ import {
 } from "@/lib/ai/factory";
 import { isImageOperation } from "@/lib/ai/types";
 import { detectImageMime, filenameForMime, isAllowedImageMime } from "@/lib/assets/mime";
-import { persistDerivedAsset, rollbackDerivedAsset } from "@/lib/assets/persist";
+import { persistDerivedAsset } from "@/lib/assets/persist";
 import { assertResizeWithinLimits } from "@/lib/images/transform";
 import { isUpscaleScaleFactor } from "@/lib/validators/job";
 import { assertWithinQuota } from "@/lib/assets/quota";
@@ -19,6 +19,8 @@ import { getOwnedAsset } from "@/lib/assets/service";
 import { validateAndSanitizeImage } from "@/lib/assets/validate-image";
 import { getEnv } from "@/lib/env";
 import { DomainError } from "@/lib/errors";
+import { reconcileJobCredits, shouldReleaseCreditsForFailure } from "@/lib/jobs/credits";
+import { releaseCredits, settleCredits } from "@/lib/billing/service";
 import { logger } from "@/lib/logging";
 import { getStorage } from "@/lib/storage";
 import { assertCompatibleMask, assertMaskHasSelection } from "@/lib/assets/mask";
@@ -31,9 +33,11 @@ export async function processJob(jobId: string) {
     throw new DomainError("NOT_FOUND", "Job not found", 404);
   }
   if (existing.status === "succeeded" || existing.status === "cancelled") {
+    await reconcileJobCredits(existing);
     return existing;
   }
   if (existing.status === "failed" && existing.errorCode && !isRetryableProviderCode(existing.errorCode)) {
+    await reconcileJobCredits(existing);
     return existing;
   }
   if (
@@ -59,7 +63,9 @@ export async function processJob(jobId: string) {
     },
   });
   if (claimed.count !== 1) {
-    return prisma.aIJob.findUniqueOrThrow({ where: { id: jobId } });
+    const current = await prisma.aIJob.findUniqueOrThrow({ where: { id: jobId } });
+    await reconcileJobCredits(current);
+    return current;
   }
 
   const job = await prisma.aIJob.findUniqueOrThrow({ where: { id: jobId } });
@@ -86,7 +92,7 @@ export async function processJob(jobId: string) {
         400,
       );
     }
-    const reused = await reuseExistingOutput(jobId);
+    const reused = await reuseExistingOutput(job);
     if (reused) {
       return reused;
     }
@@ -117,23 +123,47 @@ export async function processJob(jobId: string) {
       throw error;
     }
 
-    const failed = await prisma.aIJob.update({
-      where: { id: jobId },
-      data: {
-        status: "failed",
-        finishedAt: new Date(),
-        errorCode: code,
-        errorMessage: message,
-      },
+    const persistedOutput = await prisma.asset.findFirst({
+      where: { sourceJobId: jobId, deletedAt: null },
     });
-    await prisma.aIJobEvent.create({
-      data: {
-        jobId,
-        fromStatus: "processing",
-        toStatus: "failed",
-        attempt: job.attemptCount,
-        payloadJson: { code },
-      },
+    if (persistedOutput) {
+      await prisma.aIJob.update({
+        where: { id: jobId },
+        data: { status: "queued", errorCode: code, errorMessage: message },
+      });
+      logger.error(
+        { jobId, code },
+        "Job has output but completion/settlement failed; requeued without releasing credits",
+      );
+      throw error;
+    }
+
+    const failed = await prisma.$transaction(async (tx) => {
+      const updated = await tx.aIJob.update({
+        where: { id: jobId },
+        data: {
+          status: "failed",
+          finishedAt: new Date(),
+          errorCode: code,
+          errorMessage: message,
+        },
+      });
+      await tx.aIJobEvent.create({
+        data: {
+          jobId,
+          fromStatus: "processing",
+          toStatus: "failed",
+          attempt: job.attemptCount,
+          payloadJson: { code },
+        },
+      });
+      if (shouldReleaseCreditsForFailure(code)) {
+        await releaseCredits(
+          { userId: job.userId, jobId, reservationId: job.reservationId },
+          tx,
+        );
+      }
+      return updated;
     });
     if (!retryable) {
       return failed;
@@ -142,41 +172,30 @@ export async function processJob(jobId: string) {
   }
 }
 
-async function reuseExistingOutput(jobId: string) {
+async function reuseExistingOutput(job: {
+  id: string;
+  userId: string;
+  reservationId: string | null;
+  attemptCount: number;
+}) {
   const existing = await prisma.asset.findFirst({
-    where: { sourceJobId: jobId, deletedAt: null },
+    where: { sourceJobId: job.id, deletedAt: null },
     orderBy: { createdAt: "asc" },
   });
   if (!existing) {
     return null;
   }
 
-  const succeeded = await prisma.aIJob.update({
-    where: { id: jobId },
-    data: {
-      status: "succeeded",
-      finishedAt: new Date(),
-      outputAssetIds: [existing.id],
-      errorCode: null,
-      errorMessage: null,
-    },
+  return markJobSucceeded(job, { latencyMs: 0, rawModel: "reused", images: [] }, existing.id, {
+    reusedAssetId: existing.id,
   });
-  await prisma.aIJobEvent.create({
-    data: {
-      jobId,
-      fromStatus: "processing",
-      toStatus: "succeeded",
-      attempt: succeeded.attemptCount,
-      payloadJson: { reusedAssetId: existing.id },
-    },
-  });
-  return succeeded;
 }
 
 async function executeGenerate(job: {
   id: string;
   userId: string;
   projectId: string | null;
+  reservationId: string | null;
   providerId: string;
   modelId: string;
   inputJson: unknown;
@@ -209,6 +228,7 @@ async function executeRemoveBackground(job: {
   id: string;
   userId: string;
   projectId: string | null;
+  reservationId: string | null;
   providerId: string;
   modelId: string;
   inputJson: unknown;
@@ -264,18 +284,14 @@ async function executeRemoveBackground(job: {
     sourceJobId: job.id,
   });
 
-  try {
-    return await markJobSucceeded(job, result, asset.id);
-  } catch (error) {
-    await rollbackDerivedAsset(job.userId, asset);
-    throw error;
-  }
+  return markJobSucceeded(job, result, asset.id);
 }
 
 async function executeUpscale(job: {
   id: string;
   userId: string;
   projectId: string | null;
+  reservationId: string | null;
   providerId: string;
   modelId: string;
   inputJson: unknown;
@@ -336,18 +352,14 @@ async function executeUpscale(job: {
     sourceJobId: job.id,
   });
 
-  try {
-    return await markJobSucceeded(job, result, asset.id);
-  } catch (error) {
-    await rollbackDerivedAsset(job.userId, asset);
-    throw error;
-  }
+  return markJobSucceeded(job, result, asset.id);
 }
 
 async function executeEdit(job: {
   id: string;
   userId: string;
   projectId: string | null;
+  reservationId: string | null;
   providerId: string;
   modelId: string;
   inputJson: unknown;
@@ -374,6 +386,7 @@ async function executeRemoveObject(job: {
   id: string;
   userId: string;
   projectId: string | null;
+  reservationId: string | null;
   providerId: string;
   modelId: string;
   inputJson: unknown;
@@ -407,7 +420,7 @@ async function executeRemoveObject(job: {
 }
 
 async function persistStudioDerivative(
-  job: { id: string; userId: string; projectId: string | null; attemptCount: number },
+  job: { id: string; userId: string; projectId: string | null; reservationId: string | null; attemptCount: number },
   source: { id: string; originalFilename: string },
   result: ProviderResult,
   env: { MAX_UPLOAD_BYTES: number; MAX_IMAGE_PIXELS: number; MAX_IMAGE_EDGE_PX: number },
@@ -436,12 +449,7 @@ async function persistStudioDerivative(
     sourceJobId: job.id,
   });
 
-  try {
-    return await markJobSucceeded(job, result, asset.id);
-  } catch (error) {
-    await rollbackDerivedAsset(job.userId, asset);
-    throw error;
-  }
+  return markJobSucceeded(job, result, asset.id);
 }
 
 async function loadOwnedImage(userId: string, projectId: string | null, assetId: string) {
@@ -490,35 +498,43 @@ async function loadOwnedMask(
 }
 
 async function markJobSucceeded(
-  job: { id: string; attemptCount: number },
+  job: { id: string; userId: string; reservationId: string | null; attemptCount: number },
   result: ProviderResult,
   outputAssetId: string,
+  extraPayload: Record<string, unknown> = {},
 ) {
-  const succeeded = await prisma.aIJob.update({
-    where: { id: job.id },
-    data: {
-      status: "succeeded",
-      finishedAt: new Date(),
-      outputAssetIds: [outputAssetId],
-      errorCode: null,
-      errorMessage: null,
-    },
-  });
-  await prisma.aIJobEvent.create({
-    data: {
-      jobId: job.id,
-      fromStatus: "processing",
-      toStatus: "succeeded",
-      attempt: job.attemptCount,
-      payloadJson: {
-        latencyMs: result.latencyMs,
-        providerRequestId: result.providerRequestId,
-        model: result.rawModel,
-        outputAssetId,
+  return prisma.$transaction(async (tx) => {
+    const succeeded = await tx.aIJob.update({
+      where: { id: job.id },
+      data: {
+        status: "succeeded",
+        finishedAt: new Date(),
+        outputAssetIds: [outputAssetId],
+        errorCode: null,
+        errorMessage: null,
       },
-    },
+    });
+    await tx.aIJobEvent.create({
+      data: {
+        jobId: job.id,
+        fromStatus: "processing",
+        toStatus: "succeeded",
+        attempt: job.attemptCount,
+        payloadJson: {
+          latencyMs: result.latencyMs,
+          providerRequestId: result.providerRequestId,
+          model: result.rawModel,
+          outputAssetId,
+          ...extraPayload,
+        },
+      },
+    });
+    await settleCredits(
+      { userId: job.userId, jobId: job.id, reservationId: job.reservationId },
+      tx,
+    );
+    return succeeded;
   });
-  return succeeded;
 }
 
 function requireProviderImage(result: ProviderResult) {

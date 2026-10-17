@@ -2,6 +2,8 @@
 
 Credits are an integer ledger. Available, reserved, and consumed balances are stored separately. The browser never supplies a balance, a price, or a user id for charging.
 
+**Phase 4.6 first slice** implements reservation, settlement, release, and the two read APIs. See [PHASE_4_6.md](./PHASE_4_6.md). Payments, webhooks, Midtrans, Stripe, packages, and admin grant routes are **not** in this slice. Provisional prices are in `lib/billing/pricing.ts`, not `OperationPrice` rows.
+
 ## Invariants
 
 1. **Server authorization.** Every billable operation estimates cost from `OperationPrice` after loading the session and the model.
@@ -93,7 +95,7 @@ in transaction:
     reservation released
 ```
 
-Interrupted workers: jobs left in `processing` past `timeoutAt` are reset to `queued` or `failed` by a recovery sweep. Recovery must not settle twice.
+Interrupted workers: `processJob` reclaims `queued` / retryable `failed` / `processing` past `timeoutAt`. A committed job that was never published to Redis stays `queued` with a pending reservation; call `processJob` or `enqueueJob` with the same id. Timeouts and other retryable provider codes keep the hold. After the attempt cap those jobs may be `failed` while the reservation stays `pending` for reconciliation — they are not auto-refunded. Recovery must not settle twice.
 
 ## Analytics
 

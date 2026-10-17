@@ -10,6 +10,7 @@ import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db";
 import { getEnv, resetEnvCache } from "@/lib/env";
 import { setFalSubscriberForTests } from "@/lib/ai/providers/fal-client";
+import { grantCredits } from "@/lib/billing/service";
 import { createEditJob, createRemoveObjectJob } from "@/lib/jobs/service";
 import { processJob } from "@/lib/jobs/processor";
 import { createProject } from "@/lib/projects/service";
@@ -59,6 +60,7 @@ async function createAccount() {
     body: { email, password },
     asResponse: true,
   });
+  await grantCredits(signedUp.user.id, 1_000, `test-grant:${randomUUID()}`);
   return { userId: signedUp.user.id, cookie: cookieHeader(signIn) };
 }
 

@@ -2,7 +2,7 @@
 
 Credit-metered AI image studio: generation, editing, enhancement, conversion, projects, and an admin console.
 
-Phase 3 is live: authentication, owned projects, private uploads, PNG/JPEG/WebP conversion (original preserved), and asynchronous generate jobs. Live OpenAI generate has been verified in this environment. If `OPENAI_API_KEY` is unset, the API returns `PROVIDER_NOT_CONFIGURED` rather than a fake image. Credits and payments are not implemented.
+Phase 3 is live: authentication, owned projects, private uploads, PNG/JPEG/WebP conversion (original preserved), and asynchronous generate jobs. Live OpenAI generate has been verified in this environment. If `OPENAI_API_KEY` is unset, the API returns `PROVIDER_NOT_CONFIGURED` rather than a fake image. Phase 4.6 meters the five async studio jobs with reserved-then-settled integer credits. Convert/resize/crop stay free. There is still no payment gateway; balances start at zero.
 
 Phase 4.5 adds a provider-independent adapter layer. Phase 4.2 adds background-removal jobs (`REMOVE_BACKGROUND`) on owned images; the original is kept and the result is a private transparent PNG. Phase 4.3 adds upscale jobs (`UPSCALE`, factors 2 / 3 / 4) the same way; the original is kept and the result is a private larger `DERIVATIVE`. Phase 4.4 adds `EDIT` (text prompt, optional mask) and `REMOVE_OBJECT` (same-size PNG mask). Phase 4.7 routes Fal through `@fal-ai/client`, adds Fal text-to-image (`fal-ai/flux/schnell`), and adds Stability AI REST adapters. Tests use mock adapters or stubbed HTTP. Live OpenAI/Fal/Stability are not invoked unless the matching server key is set and a user runs the job. Missing keys in live mode return `PROVIDER_NOT_CONFIGURED`, not a Sharp stand-in. A failed Fal call does not fall back to Stability.
 
@@ -61,5 +61,5 @@ See `docs/` for architecture, database, providers, billing, security, deployment
 | Post-test audit | Complete — see docs/POST_TEST_AUDIT.md |
 | 2 Projects and assets | PASS |
 | 3 Converter and first AI job | PASS (live OpenAI generate verified) |
-| 4 AI image studio | 4.1–4.5 PASS. 4.6 not on this branch (draft PR #1). 4.7 Fal official client + Stability + Render Blueprint (mock tests; not live-verified). |
+| 4 AI image studio | 4.1–4.5 PASS. 4.6 credits recovered onto this branch (no payments). 4.7 Fal official client + Stability + Render Blueprint (mock tests; not live-verified). |
 | 5–7 | Not started |

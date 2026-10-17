@@ -1,6 +1,6 @@
 # Phase 4 plan — AI image studio
 
-**Status:** Slice **4.1 PASS**. Slice **4.5 PASS**. Slice **4.2 PASS** (background removal jobs; mock tests, no live Fal). Slice **4.3 PASS** (upscale jobs; mock tests, no live Fal). Slice **4.4 PASS** (edit / object removal; mock tests, no live OpenAI/Fal). Slice 4.6 is not on this branch. Slice **4.7** adds the official Fal client, Stability AI adapters, and a Render Blueprint (mock/HTTP-stub tests only). See [PHASE_4_1.md](./PHASE_4_1.md), [PHASE_4_5.md](./PHASE_4_5.md), [PHASE_4_2.md](./PHASE_4_2.md), [PHASE_4_3.md](./PHASE_4_3.md), [PHASE_4_4.md](./PHASE_4_4.md), and [PHASE_4_7.md](./PHASE_4_7.md).
+**Status:** Slice **4.1 PASS**. Slice **4.5 PASS**. Slice **4.2 PASS** (background removal jobs; mock tests, no live Fal). Slice **4.3 PASS** (upscale jobs; mock tests, no live Fal). Slice **4.4 PASS** (edit / object removal; mock tests, no live OpenAI/Fal). Slice **4.6 first slice** implements integer credit metering (no payments), recovered onto this branch. Slice **4.7** adds the official Fal client, Stability AI adapters, and a Render Blueprint (mock/HTTP-stub tests only). See [PHASE_4_1.md](./PHASE_4_1.md), [PHASE_4_5.md](./PHASE_4_5.md), [PHASE_4_2.md](./PHASE_4_2.md), [PHASE_4_3.md](./PHASE_4_3.md), [PHASE_4_4.md](./PHASE_4_4.md), [PHASE_4_6.md](./PHASE_4_6.md), and [PHASE_4_7.md](./PHASE_4_7.md).
 
 Phase 3 is **PASS**. This plan extends the existing Next.js app, Prisma schema, private storage, and BullMQ worker. It does not restart Phase 3 or replace working convert/generate paths.
 

@@ -1,11 +1,16 @@
+import { randomUUID } from "node:crypto";
 import { resolveProvider } from "@/lib/ai/generate";
 import { isAllowedImageMime } from "@/lib/assets/mime";
 import { assertWithinQuota } from "@/lib/assets/quota";
 import { getOwnedAsset } from "@/lib/assets/service";
+import { getCreditCost } from "@/lib/billing/pricing";
+import { reserveCredits } from "@/lib/billing/service";
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
 import { getEnv } from "@/lib/env";
 import { DomainError, notFound } from "@/lib/errors";
 import { enqueueJob } from "@/lib/jobs/queue";
+import { logger } from "@/lib/logging";
 import { getOwnedProject } from "@/lib/projects/service";
 import { assertResizeWithinLimits } from "@/lib/images/transform";
 import {
@@ -29,27 +34,16 @@ export async function createGenerateJob(userId: string, input: unknown) {
 
   await getOwnedProject(userId, parsed.data.projectId);
   const provider = resolveProvider("GENERATE");
-  const timeoutMs = env.JOB_DEFAULT_TIMEOUT_MS;
 
-  const job = await prisma.aIJob.create({
-    data: {
-      userId,
-      projectId: parsed.data.projectId,
-      operation: "GENERATE",
-      status: "queued",
-      providerId: provider.providerId,
-      modelId: provider.modelId,
-      inputJson: { prompt: parsed.data.prompt, projectId: parsed.data.projectId },
-      timeoutAt: new Date(Date.now() + timeoutMs),
-    },
+  return createQueuedBillableJob({
+    userId,
+    projectId: parsed.data.projectId,
+    operation: "GENERATE",
+    providerId: provider.providerId,
+    modelId: provider.modelId,
+    inputJson: { prompt: parsed.data.prompt, projectId: parsed.data.projectId },
+    timeoutMs: env.JOB_DEFAULT_TIMEOUT_MS,
   });
-
-  await prisma.aIJobEvent.create({
-    data: { jobId: job.id, fromStatus: null, toStatus: "queued", attempt: 0 },
-  });
-
-  await enqueueJob(job.id);
-  return job;
 }
 
 export async function createRemoveBackgroundJob(userId: string, input: unknown) {
@@ -77,31 +71,20 @@ export async function createRemoveBackgroundJob(userId: string, input: unknown) 
 
   await assertWithinQuota(userId, source.byteSize);
   const provider = resolveProvider("REMOVE_BACKGROUND");
-  const timeoutMs = env.JOB_DEFAULT_TIMEOUT_MS;
 
-  const job = await prisma.aIJob.create({
-    data: {
-      userId,
+  return createQueuedBillableJob({
+    userId,
+    projectId: parsed.data.projectId,
+    operation: "REMOVE_BACKGROUND",
+    providerId: provider.providerId,
+    modelId: provider.modelId,
+    inputJson: {
       projectId: parsed.data.projectId,
-      operation: "REMOVE_BACKGROUND",
-      status: "queued",
-      providerId: provider.providerId,
-      modelId: provider.modelId,
-      inputJson: {
-        projectId: parsed.data.projectId,
-        assetId: source.id,
-        inputAssetIds: [source.id],
-      },
-      timeoutAt: new Date(Date.now() + timeoutMs),
+      assetId: source.id,
+      inputAssetIds: [source.id],
     },
+    timeoutMs: env.JOB_DEFAULT_TIMEOUT_MS,
   });
-
-  await prisma.aIJobEvent.create({
-    data: { jobId: job.id, fromStatus: null, toStatus: "queued", attempt: 0 },
-  });
-
-  await enqueueJob(job.id);
-  return job;
 }
 
 export async function createUpscaleJob(userId: string, input: unknown) {
@@ -139,32 +122,22 @@ export async function createUpscaleJob(userId: string, input: unknown) {
   });
   await assertWithinQuota(userId, source.byteSize * scaleFactor * scaleFactor);
   const provider = resolveProvider("UPSCALE");
-  const timeoutMs = env.JOB_DEFAULT_TIMEOUT_MS;
 
-  const job = await prisma.aIJob.create({
-    data: {
-      userId,
+  return createQueuedBillableJob({
+    userId,
+    projectId: parsed.data.projectId,
+    operation: "UPSCALE",
+    providerId: provider.providerId,
+    modelId: provider.modelId,
+    inputJson: {
       projectId: parsed.data.projectId,
-      operation: "UPSCALE",
-      status: "queued",
-      providerId: provider.providerId,
-      modelId: provider.modelId,
-      inputJson: {
-        projectId: parsed.data.projectId,
-        assetId: source.id,
-        inputAssetIds: [source.id],
-        scaleFactor,
-      },
-      timeoutAt: new Date(Date.now() + timeoutMs),
+      assetId: source.id,
+      inputAssetIds: [source.id],
+      scaleFactor,
     },
+    timeoutMs: env.JOB_DEFAULT_TIMEOUT_MS,
+    scaleFactor,
   });
-
-  await prisma.aIJobEvent.create({
-    data: { jobId: job.id, fromStatus: null, toStatus: "queued", attempt: 0 },
-  });
-
-  await enqueueJob(job.id);
-  return job;
 }
 
 export async function createEditJob(userId: string, input: unknown) {
@@ -187,33 +160,22 @@ export async function createEditJob(userId: string, input: unknown) {
 
   await assertWithinQuota(userId, source.byteSize);
   const provider = resolveProvider("EDIT");
-  const timeoutMs = env.JOB_DEFAULT_TIMEOUT_MS;
 
-  const job = await prisma.aIJob.create({
-    data: {
-      userId,
+  return createQueuedBillableJob({
+    userId,
+    projectId: parsed.data.projectId,
+    operation: "EDIT",
+    providerId: provider.providerId,
+    modelId: provider.modelId,
+    inputJson: {
       projectId: parsed.data.projectId,
-      operation: "EDIT",
-      status: "queued",
-      providerId: provider.providerId,
-      modelId: provider.modelId,
-      inputJson: {
-        projectId: parsed.data.projectId,
-        assetId: source.id,
-        inputAssetIds: mask ? [source.id, mask.id] : [source.id],
-        prompt: parsed.data.prompt,
-        ...(mask ? { maskAssetId: mask.id } : {}),
-      },
-      timeoutAt: new Date(Date.now() + timeoutMs),
+      assetId: source.id,
+      inputAssetIds: mask ? [source.id, mask.id] : [source.id],
+      prompt: parsed.data.prompt,
+      ...(mask ? { maskAssetId: mask.id } : {}),
     },
+    timeoutMs: env.JOB_DEFAULT_TIMEOUT_MS,
   });
-
-  await prisma.aIJobEvent.create({
-    data: { jobId: job.id, fromStatus: null, toStatus: "queued", attempt: 0 },
-  });
-
-  await enqueueJob(job.id);
-  return job;
 }
 
 export async function createRemoveObjectJob(userId: string, input: unknown) {
@@ -237,31 +199,77 @@ export async function createRemoveObjectJob(userId: string, input: unknown) {
 
   await assertWithinQuota(userId, source.byteSize);
   const provider = resolveProvider("REMOVE_OBJECT");
-  const timeoutMs = env.JOB_DEFAULT_TIMEOUT_MS;
 
-  const job = await prisma.aIJob.create({
-    data: {
-      userId,
+  return createQueuedBillableJob({
+    userId,
+    projectId: parsed.data.projectId,
+    operation: "REMOVE_OBJECT",
+    providerId: provider.providerId,
+    modelId: provider.modelId,
+    inputJson: {
       projectId: parsed.data.projectId,
-      operation: "REMOVE_OBJECT",
-      status: "queued",
-      providerId: provider.providerId,
-      modelId: provider.modelId,
-      inputJson: {
-        projectId: parsed.data.projectId,
-        assetId: source.id,
-        maskAssetId: mask.id,
-        inputAssetIds: [source.id, mask.id],
-      },
-      timeoutAt: new Date(Date.now() + timeoutMs),
+      assetId: source.id,
+      maskAssetId: mask.id,
+      inputAssetIds: [source.id, mask.id],
     },
+    timeoutMs: env.JOB_DEFAULT_TIMEOUT_MS,
+  });
+}
+
+export async function createQueuedBillableJob(input: {
+  userId: string;
+  projectId: string | null;
+  operation: "GENERATE" | "EDIT" | "REMOVE_BACKGROUND" | "REMOVE_OBJECT" | "UPSCALE";
+  providerId: string;
+  modelId: string;
+  inputJson: Record<string, unknown>;
+  timeoutMs: number;
+  scaleFactor?: unknown;
+}) {
+  const credits = getCreditCost({ operation: input.operation, scaleFactor: input.scaleFactor });
+  const jobId = randomUUID();
+  const reservationId = randomUUID();
+
+  const job = await prisma.$transaction(async (tx) => {
+    await reserveCredits(
+      {
+        userId: input.userId,
+        credits,
+        jobId,
+        reservationId,
+        operation: input.operation,
+      },
+      tx,
+    );
+    const created = await tx.aIJob.create({
+      data: {
+        id: jobId,
+        userId: input.userId,
+        projectId: input.projectId,
+        operation: input.operation,
+        status: "queued",
+        providerId: input.providerId,
+        modelId: input.modelId,
+        inputJson: input.inputJson as Prisma.InputJsonValue,
+        reservationId,
+        timeoutAt: new Date(Date.now() + input.timeoutMs),
+      },
+    });
+    await tx.aIJobEvent.create({
+      data: { jobId: created.id, fromStatus: null, toStatus: "queued", attempt: 0 },
+    });
+    return created;
   });
 
-  await prisma.aIJobEvent.create({
-    data: { jobId: job.id, fromStatus: null, toStatus: "queued", attempt: 0 },
-  });
-
-  await enqueueJob(job.id);
+  try {
+    await enqueueJob(job.id);
+  } catch (error) {
+    logger.error(
+      { err: error, jobId: job.id },
+      "Queue publication failed after the billing transaction committed; job remains queued for recovery",
+    );
+    throw error;
+  }
   return job;
 }
 

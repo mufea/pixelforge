@@ -1,6 +1,6 @@
 # Database design
 
-PostgreSQL is the system of record. Prisma ORM (pinned to v7 in Phase 1 for Better Auth adapter compatibility) owns the schema. Migrations are forward-only. Applied: `phase1_foundation`, `phase2_projects_assets`, `phase3_convert_and_jobs`.
+PostgreSQL is the system of record. Prisma ORM (pinned to v7 in Phase 1 for Better Auth adapter compatibility) owns the schema. Migrations are forward-only. Applied: `phase1_foundation`, `phase2_projects_assets`, `phase3_convert_and_jobs`, `phase46_credits`.
 
 All primary keys are UUID (`uuid` / `@db.Uuid` or `cuid` — **proposed: UUID v7** for time-locality on jobs and assets). Every user-owned row includes `userId` and is queried with that constraint. Soft-delete (`deletedAt`) is used for projects, assets, API keys, and users (account deletion grace). Credit ledger rows are never soft-deleted or updated.
 
@@ -130,6 +130,8 @@ OperationPrice
 Admin enable/disable toggles `Provider.enabled` and `AIModel.enabled`. Frontends read the registry.
 
 ### Credits and billing
+
+Phase 4.6 added `CreditAccount`, `CreditReservation`, and `CreditLedgerEntry`. `Payment`, `WebhookEvent`, `CreditPackage`, `Subscription`, and `UsageRecord` remain documented for later slices and are **not** in `schema.prisma` yet. Existing users were backfilled with `availableCredits = 0`.
 
 ```
 CreditAccount

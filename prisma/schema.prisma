@@ -25,7 +25,10 @@ model User {
   assets        Asset[]
   assetVersions AssetVersion[]
   uploadIntents UploadIntent[]
-  jobs          AIJob[]
+  jobs                AIJob[]
+  creditAccount       CreditAccount?
+  creditReservations  CreditReservation[]
+  creditLedgerEntries CreditLedgerEntry[]
 
   @@unique([email])
   @@map("user")
@@ -203,12 +206,73 @@ model AIJob {
   idempotencyKey  String?      @unique
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
-  events          AIJobEvent[]
+  events             AIJobEvent[]
+  creditReservation  CreditReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
 
+  @@unique([reservationId])
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@index([providerId, createdAt])
   @@index([projectId])
+}
+
+model CreditAccount {
+  id               String              @id @default(uuid())
+  userId           String              @unique
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  availableCredits Int                 @default(0)
+  reservedCredits  Int                 @default(0)
+  lifetimeGranted  Int                 @default(0)
+  lifetimeConsumed Int                 @default(0)
+  version          Int                 @default(0)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  reservations     CreditReservation[]
+  ledgerEntries    CreditLedgerEntry[]
+
+  @@index([userId])
+}
+
+model CreditReservation {
+  id            String              @id @default(uuid())
+  userId        String
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId     String
+  account       CreditAccount       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  jobId         String              @unique
+  credits       Int
+  status        String              @default("pending")
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  settledAt     DateTime?
+  releasedAt    DateTime?
+  jobs          AIJob[]
+  ledgerEntries CreditLedgerEntry[]
+
+  @@index([userId, status])
+  @@index([accountId])
+}
+
+model CreditLedgerEntry {
+  id             String             @id @default(uuid())
+  userId         String
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        CreditAccount      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  reservationId  String?
+  reservation    CreditReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  jobId          String?
+  amount         Int
+  delta          Int
+  balanceAfter   Int
+  reason         String
+  idempotencyKey String             @unique
+  metadataJson   Json?
+  createdAt      DateTime           @default(now())
+
+  @@unique([reservationId, reason])
+  @@index([userId, createdAt])
+  @@index([accountId, createdAt])
 }
 
 model AIJobEvent {

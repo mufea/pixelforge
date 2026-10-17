@@ -6,6 +6,7 @@ import { POST as createJobRoute } from "@/app/api/jobs/route";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db";
 import { persistDerivedAsset } from "@/lib/assets/persist";
+import { grantCredits } from "@/lib/billing/service";
 import { createGenerateJob, getOwnedJob } from "@/lib/jobs/service";
 import { processJob } from "@/lib/jobs/processor";
 import { createProject } from "@/lib/projects/service";
@@ -32,6 +33,7 @@ async function createAccount() {
     body: { email, password },
     asResponse: true,
   });
+  await grantCredits(signedUp.user.id, 1_000, `test-grant:${randomUUID()}`);
   return { userId: signedUp.user.id, cookie: cookieHeader(signIn) };
 }
 

@@ -24,6 +24,14 @@ function queueOptions(connection: IORedis) {
   return { connection, prefix: getEnv().QUEUE_PREFIX };
 }
 
+/**
+ * Queue publication is outside the database transaction that creates the job
+ * and credit reservation. A committed `queued` AIJob is the source of truth.
+ * If this throws, the API fails but the reservation stays pending and
+ * `processJob(jobId)` (or a later re-enqueue with the same BullMQ jobId) can
+ * recover the work. Redis is disposable; do not roll back billing because the
+ * broker was unreachable.
+ */
 export async function enqueueJob(jobId: string) {
   const env = getEnv();
   const conn = redis();
