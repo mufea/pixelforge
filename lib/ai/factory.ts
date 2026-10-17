@@ -7,24 +7,29 @@ import {
   isProviderConfigured,
 } from "@/lib/ai/config";
 import { normalizeProviderError } from "@/lib/ai/errors";
-import { falRemoveBackground, falUnimplemented, falUpscale } from "@/lib/ai/providers/fal";
+import { falRemoveBackground, falRemoveObject, falUnimplemented, falUpscale } from "@/lib/ai/providers/fal";
 import { googleUnimplemented } from "@/lib/ai/providers/google";
-import { mockGenerate, mockRemoveBackground, mockUpscale } from "@/lib/ai/providers/mock";
+import { mockEdit, mockGenerate, mockRemoveBackground, mockRemoveObject, mockUpscale } from "@/lib/ai/providers/mock";
+import { openaiEdit } from "@/lib/ai/providers/openai-edit";
 import { openaiGenerate } from "@/lib/ai/providers/openai-generate";
 import { assertOperationSupported, defaultModelFor, getModel, getProviderEntry } from "@/lib/ai/registry";
 import {
   isProviderId,
   type BackgroundRemovalAdapter,
+  type EditInput,
   type GenerateInput,
+  type ImageEditAdapter,
   type ImageGenerationAdapter,
-  type UpscaleAdapter,
-  type UpscaleInput,
   type ImageOperation,
+  type ObjectRemovalAdapter,
   type ProviderId,
   type ProviderResult,
   type ProviderSelection,
   type RemoveBackgroundInput,
+  type RemoveObjectInput,
   type ResolvedProvider,
+  type UpscaleAdapter,
+  type UpscaleInput,
 } from "@/lib/ai/types";
 
 export function parseProviderId(value: string): ProviderId {
@@ -85,7 +90,10 @@ function resolveAutomatic(operation: ImageOperation): ResolvedProvider {
   if (operation === "GENERATE" && config.openai.configured) {
     return { providerId: "openai", modelId: "gpt-image-2.5-flare" };
   }
-  if ((operation === "REMOVE_BACKGROUND" || operation === "UPSCALE") && config.fal.configured) {
+  if (operation === "EDIT" && config.openai.configured) {
+    return { providerId: "openai", modelId: "gpt-image-2.5-flare" };
+  }
+  if ((operation === "REMOVE_BACKGROUND" || operation === "UPSCALE" || operation === "REMOVE_OBJECT") && config.fal.configured) {
     const fal = defaultModelFor("fal", operation);
     if (fal) {
       return { providerId: "fal", modelId: fal.modelId };
@@ -99,6 +107,12 @@ function resolveAutomatic(operation: ImageOperation): ResolvedProvider {
   }
   if (operation === "UPSCALE") {
     throw new DomainError("PROVIDER_NOT_CONFIGURED", "No upscale provider is configured", 503);
+  }
+  if (operation === "EDIT") {
+    throw new DomainError("PROVIDER_NOT_CONFIGURED", "No image editing provider is configured", 503);
+  }
+  if (operation === "REMOVE_OBJECT") {
+    throw new DomainError("PROVIDER_NOT_CONFIGURED", "No object removal provider is configured", 503);
   }
   throw new DomainError("MODEL_CAPABILITY_UNSUPPORTED", `Operation ${operation} is not implemented`, 400);
 }
@@ -261,6 +275,110 @@ export function isUpscaleAvailable(): boolean {
 
 export function upscaleUnavailableReason(): string | null {
   if (isUpscaleAvailable()) {
+    return null;
+  }
+  const config = getProviderRuntimeConfig();
+  if (!config.jobsEnabled) {
+    return "AI jobs are temporarily disabled.";
+  }
+  return "Fal is not configured. Set FAL_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests.";
+}
+
+export function getEditAdapter(selection: ProviderSelection = {}): ImageEditAdapter {
+  const resolved = resolveProvider("EDIT", selection);
+  if (resolved.providerId === "mock") {
+    return { providerId: "mock", modelId: resolved.modelId, edit: mockEdit };
+  }
+  if (resolved.providerId === "openai") {
+    return { providerId: "openai", modelId: resolved.modelId, edit: openaiEdit };
+  }
+  throw new DomainError(
+    "MODEL_CAPABILITY_UNSUPPORTED",
+    `Provider ${resolved.providerId} does not implement EDIT`,
+    400,
+  );
+}
+
+export async function runEdit(
+  input: EditInput,
+  signal: AbortSignal,
+  selection: ProviderSelection = {},
+): Promise<ProviderResult> {
+  try {
+    const adapter = getEditAdapter(selection);
+    return await adapter.edit(input, signal);
+  } catch (error) {
+    throw normalizeProviderError(error);
+  }
+}
+
+export function isEditAvailable(): boolean {
+  const config = getProviderRuntimeConfig();
+  if (!config.jobsEnabled) {
+    return false;
+  }
+  try {
+    resolveProvider("EDIT");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function editUnavailableReason(): string | null {
+  if (isEditAvailable()) {
+    return null;
+  }
+  const config = getProviderRuntimeConfig();
+  if (!config.jobsEnabled) {
+    return "AI jobs are temporarily disabled.";
+  }
+  return "OpenAI is not configured. Set OPENAI_API_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests.";
+}
+
+export function getObjectRemovalAdapter(selection: ProviderSelection = {}): ObjectRemovalAdapter {
+  const resolved = resolveProvider("REMOVE_OBJECT", selection);
+  if (resolved.providerId === "mock") {
+    return { providerId: "mock", modelId: resolved.modelId, removeObject: mockRemoveObject };
+  }
+  if (resolved.providerId === "fal") {
+    return { providerId: "fal", modelId: resolved.modelId, removeObject: falRemoveObject };
+  }
+  throw new DomainError(
+    "MODEL_CAPABILITY_UNSUPPORTED",
+    `Provider ${resolved.providerId} does not implement REMOVE_OBJECT`,
+    400,
+  );
+}
+
+export async function runRemoveObject(
+  input: RemoveObjectInput,
+  signal: AbortSignal,
+  selection: ProviderSelection = {},
+): Promise<ProviderResult> {
+  try {
+    const adapter = getObjectRemovalAdapter(selection);
+    return await adapter.removeObject(input, signal);
+  } catch (error) {
+    throw normalizeProviderError(error);
+  }
+}
+
+export function isRemoveObjectAvailable(): boolean {
+  const config = getProviderRuntimeConfig();
+  if (!config.jobsEnabled) {
+    return false;
+  }
+  try {
+    resolveProvider("REMOVE_OBJECT");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function removeObjectUnavailableReason(): string | null {
+  if (isRemoveObjectAvailable()) {
     return null;
   }
   const config = getProviderRuntimeConfig();

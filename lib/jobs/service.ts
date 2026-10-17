@@ -9,8 +9,10 @@ import { enqueueJob } from "@/lib/jobs/queue";
 import { getOwnedProject } from "@/lib/projects/service";
 import { assertResizeWithinLimits } from "@/lib/images/transform";
 import {
+  createEditJobSchema,
   createGenerateJobSchema,
   createRemoveBackgroundJobSchema,
+  createRemoveObjectJobSchema,
   createUpscaleJobSchema,
 } from "@/lib/validators/job";
 
@@ -165,6 +167,145 @@ export async function createUpscaleJob(userId: string, input: unknown) {
   return job;
 }
 
+export async function createEditJob(userId: string, input: unknown) {
+  const env = getEnv();
+  if (!env.AI_JOBS_ENABLED) {
+    throw new DomainError("AI_JOBS_DISABLED", "AI jobs are temporarily disabled", 503);
+  }
+
+  const parsed = createEditJobSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new DomainError("VALIDATION", parsed.error.issues[0]?.message ?? "Invalid job");
+  }
+
+  await getOwnedProject(userId, parsed.data.projectId);
+  const source = await requireOwnedSourceImage(userId, parsed.data.projectId, parsed.data.assetId);
+  let mask = null;
+  if (parsed.data.maskAssetId) {
+    mask = await requireOwnedMask(userId, parsed.data.projectId, parsed.data.maskAssetId, source);
+  }
+
+  await assertWithinQuota(userId, source.byteSize);
+  const provider = resolveProvider("EDIT");
+  const timeoutMs = env.JOB_DEFAULT_TIMEOUT_MS;
+
+  const job = await prisma.aIJob.create({
+    data: {
+      userId,
+      projectId: parsed.data.projectId,
+      operation: "EDIT",
+      status: "queued",
+      providerId: provider.providerId,
+      modelId: provider.modelId,
+      inputJson: {
+        projectId: parsed.data.projectId,
+        assetId: source.id,
+        inputAssetIds: mask ? [source.id, mask.id] : [source.id],
+        prompt: parsed.data.prompt,
+        ...(mask ? { maskAssetId: mask.id } : {}),
+      },
+      timeoutAt: new Date(Date.now() + timeoutMs),
+    },
+  });
+
+  await prisma.aIJobEvent.create({
+    data: { jobId: job.id, fromStatus: null, toStatus: "queued", attempt: 0 },
+  });
+
+  await enqueueJob(job.id);
+  return job;
+}
+
+export async function createRemoveObjectJob(userId: string, input: unknown) {
+  const env = getEnv();
+  if (!env.AI_JOBS_ENABLED) {
+    throw new DomainError("AI_JOBS_DISABLED", "AI jobs are temporarily disabled", 503);
+  }
+
+  const parsed = createRemoveObjectJobSchema.safeParse(input);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    if (issue?.path[0] === "maskAssetId") {
+      throw new DomainError("MASK_REQUIRED", "Object removal requires a PNG mask of the same size as the source");
+    }
+    throw new DomainError("VALIDATION", issue?.message ?? "Invalid job");
+  }
+
+  await getOwnedProject(userId, parsed.data.projectId);
+  const source = await requireOwnedSourceImage(userId, parsed.data.projectId, parsed.data.assetId);
+  const mask = await requireOwnedMask(userId, parsed.data.projectId, parsed.data.maskAssetId, source);
+
+  await assertWithinQuota(userId, source.byteSize);
+  const provider = resolveProvider("REMOVE_OBJECT");
+  const timeoutMs = env.JOB_DEFAULT_TIMEOUT_MS;
+
+  const job = await prisma.aIJob.create({
+    data: {
+      userId,
+      projectId: parsed.data.projectId,
+      operation: "REMOVE_OBJECT",
+      status: "queued",
+      providerId: provider.providerId,
+      modelId: provider.modelId,
+      inputJson: {
+        projectId: parsed.data.projectId,
+        assetId: source.id,
+        maskAssetId: mask.id,
+        inputAssetIds: [source.id, mask.id],
+      },
+      timeoutAt: new Date(Date.now() + timeoutMs),
+    },
+  });
+
+  await prisma.aIJobEvent.create({
+    data: { jobId: job.id, fromStatus: null, toStatus: "queued", attempt: 0 },
+  });
+
+  await enqueueJob(job.id);
+  return job;
+}
+
+async function requireOwnedSourceImage(userId: string, projectId: string, assetId: string) {
+  const env = getEnv();
+  const source = await getOwnedAsset(userId, assetId);
+  if (source.projectId !== projectId) {
+    notFound("Asset not found");
+  }
+  if (!isAllowedImageMime(source.mimeType)) {
+    throw new DomainError("VALIDATION_INVALID_MIME", "Only JPEG, PNG, and WebP images can be used");
+  }
+  if (source.byteSize > env.MAX_UPLOAD_BYTES) {
+    throw new DomainError("VALIDATION_FILE_TOO_LARGE", "The source file exceeds the size limit");
+  }
+  return source;
+}
+
+async function requireOwnedMask(
+  userId: string,
+  projectId: string,
+  maskAssetId: string,
+  source: { id: string; width: number; height: number },
+) {
+  const env = getEnv();
+  if (maskAssetId === source.id) {
+    throw new DomainError("VALIDATION_MASK", "The mask must be a separate PNG from the source image");
+  }
+  const mask = await getOwnedAsset(userId, maskAssetId);
+  if (mask.projectId !== projectId) {
+    notFound("Asset not found");
+  }
+  if (mask.mimeType !== "image/png") {
+    throw new DomainError("VALIDATION_INVALID_MIME", "Masks must be PNG images");
+  }
+  if (mask.width !== source.width || mask.height !== source.height) {
+    throw new DomainError("VALIDATION_MASK_SIZE", "The mask must match the source image dimensions");
+  }
+  if (mask.byteSize > env.MAX_UPLOAD_BYTES) {
+    throw new DomainError("VALIDATION_FILE_TOO_LARGE", "The mask file exceeds the size limit");
+  }
+  return mask;
+}
+
 export async function createStudioJob(userId: string, input: unknown) {
   if (typeof input === "object" && input !== null && "operation" in input) {
     if (input.operation === "REMOVE_BACKGROUND") {
@@ -172,6 +313,12 @@ export async function createStudioJob(userId: string, input: unknown) {
     }
     if (input.operation === "UPSCALE") {
       return createUpscaleJob(userId, input);
+    }
+    if (input.operation === "EDIT") {
+      return createEditJob(userId, input);
+    }
+    if (input.operation === "REMOVE_OBJECT") {
+      return createRemoveObjectJob(userId, input);
     }
   }
   return createGenerateJob(userId, input);

@@ -10,8 +10,10 @@ import { GeneratePanel } from "@/components/jobs/generate-panel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createDownloadUrl, listProjectAssets } from "@/lib/assets/service";
 import { requireUser } from "@/lib/auth/session";
+import { editUnavailableReason, isEditAvailable } from "@/lib/ai/edit";
 import { generateUnavailableReason, isGenerateAvailable } from "@/lib/ai/generate";
 import { isRemoveBackgroundAvailable, removeBackgroundUnavailableReason } from "@/lib/ai/remove-background";
+import { isRemoveObjectAvailable, removeObjectUnavailableReason } from "@/lib/ai/remove-object";
 import { isUpscaleAvailable, upscaleUnavailableReason } from "@/lib/ai/upscale";
 import { DomainError } from "@/lib/errors";
 import { listProjectJobs, publicJob } from "@/lib/jobs/service";
@@ -125,6 +127,10 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           removeBackgroundUnavailableReason={removeBackgroundUnavailableReason()}
           upscaleAvailable={isUpscaleAvailable()}
           upscaleUnavailableReason={upscaleUnavailableReason()}
+          editAvailable={isEditAvailable()}
+          editUnavailableReason={editUnavailableReason()}
+          removeObjectAvailable={isRemoveObjectAvailable()}
+          removeObjectUnavailableReason={removeObjectUnavailableReason()}
         />
       </div>
       <Card>

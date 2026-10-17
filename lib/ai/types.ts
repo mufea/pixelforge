@@ -57,6 +57,7 @@ export type GenerateInput = {
 export type EditInput = {
   prompt: string;
   image: Buffer;
+  mimeType?: OutputImageMime;
   mask?: Buffer;
 };
 
@@ -76,6 +77,7 @@ export type UpscaleInput = {
 export type RemoveObjectInput = {
   image: Buffer;
   mask: Buffer;
+  mimeType?: OutputImageMime;
 };
 
 export type ImageGenerationAdapter = {
@@ -94,6 +96,18 @@ export type UpscaleAdapter = {
   readonly providerId: ProviderId;
   readonly modelId: string;
   upscale(input: UpscaleInput, signal: AbortSignal): Promise<ProviderResult>;
+};
+
+export type ImageEditAdapter = {
+  readonly providerId: ProviderId;
+  readonly modelId: string;
+  edit(input: EditInput, signal: AbortSignal): Promise<ProviderResult>;
+};
+
+export type ObjectRemovalAdapter = {
+  readonly providerId: ProviderId;
+  readonly modelId: string;
+  removeObject(input: RemoveObjectInput, signal: AbortSignal): Promise<ProviderResult>;
 };
 
 export type ProviderSelection = {

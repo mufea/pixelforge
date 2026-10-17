@@ -26,6 +26,23 @@ export const createUpscaleJobSchema = z.object({
   scaleFactor: z.union([z.literal(2), z.literal(3), z.literal(4)]),
 });
 
+export const createEditJobSchema = z.object({
+  operation: z.literal("EDIT"),
+  projectId: z.string().uuid(),
+  assetId: z.string().uuid(),
+  prompt: z.string().trim().min(3, "Prompt must be at least 3 characters").max(2000),
+  maskAssetId: z.string().uuid().optional(),
+});
+
+export const createRemoveObjectJobSchema = z.object({
+  operation: z.literal("REMOVE_OBJECT"),
+  projectId: z.string().uuid(),
+  assetId: z.string().uuid(),
+  maskAssetId: z.string().uuid(),
+});
+
 export type CreateGenerateJobInput = z.infer<typeof createGenerateJobSchema>;
 export type CreateRemoveBackgroundJobInput = z.infer<typeof createRemoveBackgroundJobSchema>;
 export type CreateUpscaleJobInput = z.infer<typeof createUpscaleJobSchema>;
+export type CreateEditJobInput = z.infer<typeof createEditJobSchema>;
+export type CreateRemoveObjectJobInput = z.infer<typeof createRemoveObjectJobSchema>;

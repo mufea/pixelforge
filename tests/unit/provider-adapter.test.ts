@@ -55,6 +55,14 @@ describe("provider adapter architecture", () => {
         providerId: "mock",
         modelId: "mock-upscale",
       });
+      expect(resolveProvider("EDIT")).toEqual({
+        providerId: "mock",
+        modelId: "mock-edit",
+      });
+      expect(resolveProvider("REMOVE_OBJECT")).toEqual({
+        providerId: "mock",
+        modelId: "mock-object-remove",
+      });
     });
 
     it("selects OpenAI when requested explicitly and configured", () => {
@@ -146,6 +154,42 @@ describe("provider adapter architecture", () => {
       });
     });
 
+    it("fails closed in live mode when no edit provider is configured", () => {
+      liveEnv();
+      try {
+        resolveProvider("EDIT");
+        throw new Error("expected failure");
+      } catch (error) {
+        expect(error).toMatchObject({ code: "PROVIDER_NOT_CONFIGURED", status: 503 });
+      }
+    });
+
+    it("selects OpenAI for edit when configured", () => {
+      liveEnv({ OPENAI_API_KEY: "sk-test-not-real" });
+      expect(resolveProvider("EDIT")).toEqual({
+        providerId: "openai",
+        modelId: "gpt-image-2.5-flare",
+      });
+    });
+
+    it("fails closed in live mode when no object-removal provider is configured", () => {
+      liveEnv();
+      try {
+        resolveProvider("REMOVE_OBJECT");
+        throw new Error("expected failure");
+      } catch (error) {
+        expect(error).toMatchObject({ code: "PROVIDER_NOT_CONFIGURED", status: 503 });
+      }
+    });
+
+    it("selects Fal for object removal when configured", () => {
+      liveEnv({ FAL_KEY: "fal_sk_test_not_real" });
+      expect(resolveProvider("REMOVE_OBJECT")).toEqual({
+        providerId: "fal",
+        modelId: "fal-ai/object-removal/mask",
+      });
+    });
+
     it("rejects Fal when FAL_KEY is missing", () => {
       liveEnv();
       expect(() => resolveProvider("REMOVE_BACKGROUND", { providerId: "fal" })).toThrow(DomainError);
@@ -210,7 +254,7 @@ describe("provider adapter architecture", () => {
     it("returns MODEL_DISABLED for catalog stubs that are not implemented yet", () => {
       liveEnv({ FAL_KEY: "fal_sk_test_not_real" });
       try {
-        resolveProvider("REMOVE_OBJECT", { providerId: "fal" });
+        resolveProvider("GENERATE", { providerId: "fal" });
         throw new Error("expected failure");
       } catch (error) {
         expect(error).toMatchObject({ code: "MODEL_DISABLED" });

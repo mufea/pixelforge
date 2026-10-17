@@ -3,13 +3,22 @@ import "server-only";
 import sharp from "sharp";
 import { getFalCredentials } from "@/lib/ai/config";
 import { domainErrorFromProviderResponse, normalizeProviderError } from "@/lib/ai/errors";
-import type { ImageOperation, ProviderResult, RemoveBackgroundInput, UpscaleInput } from "@/lib/ai/types";
+import type {
+  ImageOperation,
+  ProviderResult,
+  RemoveBackgroundInput,
+  RemoveObjectInput,
+  UpscaleInput,
+} from "@/lib/ai/types";
 import { detectImageMime } from "@/lib/assets/mime";
 import { DomainError } from "@/lib/errors";
 
 export const FAL_BACKGROUND_MODEL = "fal-ai/bria/background/remove";
 export const FAL_UPSCALE_MODEL = "fal-ai/flux-vision-upscaler";
+export const FAL_OBJECT_REMOVAL_MODEL = "fal-ai/object-removal/mask";
 const FAL_RUN_ORIGIN = "https://fal.run";
+
+type FalImageField = { url?: string; content?: string; file_data?: string; width?: number; height?: number };
 
 /**
  * Remaining Fal operations stay catalog stubs until later slices. They never fetch.
@@ -67,10 +76,11 @@ export async function falRemoveBackground(
   }
 
   const payload = (await response.json()) as {
-    image?: { url?: string; content?: string; file_data?: string; width?: number; height?: number };
+    image?: FalImageField;
+    images?: FalImageField[];
     request_id?: string;
   };
-  const bytes = await readFalImageBytes(payload.image, signal);
+  const bytes = await readFalImageBytes(firstFalImage(payload), signal);
   const metadata = await inspectFalImage(bytes);
 
   return {
@@ -116,10 +126,11 @@ export async function falUpscale(input: UpscaleInput, signal: AbortSignal): Prom
   }
 
   const payload = (await response.json()) as {
-    image?: { url?: string; content?: string; file_data?: string; width?: number; height?: number };
+    image?: FalImageField;
+    images?: FalImageField[];
     request_id?: string;
   };
-  const bytes = await readFalImageBytes(payload.image, signal);
+  const bytes = await readFalImageBytes(firstFalImage(payload), signal);
   const metadata = await inspectFalImage(bytes);
 
   return {
@@ -130,10 +141,62 @@ export async function falUpscale(input: UpscaleInput, signal: AbortSignal): Prom
   };
 }
 
-async function readFalImageBytes(
-  image: { url?: string; content?: string; file_data?: string } | undefined,
-  signal: AbortSignal,
-): Promise<Buffer> {
+export async function falRemoveObject(input: RemoveObjectInput, signal: AbortSignal): Promise<ProviderResult> {
+  const credentials = getFalCredentials();
+  const mime = input.mimeType ?? detectImageMime(input.image);
+  if (mime !== "image/jpeg" && mime !== "image/png" && mime !== "image/webp") {
+    throw new DomainError("VALIDATION_INVALID_SIGNATURE", "The source file is not a JPEG, PNG, or WebP image");
+  }
+  if (detectImageMime(input.mask) !== "image/png") {
+    throw new DomainError("VALIDATION_INVALID_MIME", "Object removal masks must be PNG images");
+  }
+
+  const started = Date.now();
+  const imageUri = `data:${mime};base64,${input.image.toString("base64")}`;
+  const maskUri = `data:image/png;base64,${input.mask.toString("base64")}`;
+  let response: Response;
+  try {
+    response = await fetch(`${FAL_RUN_ORIGIN}/${FAL_OBJECT_REMOVAL_MODEL}`, {
+      method: "POST",
+      signal,
+      headers: {
+        Authorization: `Key ${credentials.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        image_url: imageUri,
+        mask_url: maskUri,
+      }),
+    });
+  } catch (error) {
+    throw normalizeProviderError(error);
+  }
+
+  if (!response.ok) {
+    throw await domainErrorFromProviderResponse(response);
+  }
+
+  const payload = (await response.json()) as {
+    image?: FalImageField;
+    images?: FalImageField[];
+    request_id?: string;
+  };
+  const bytes = await readFalImageBytes(firstFalImage(payload), signal);
+  const metadata = await inspectFalImage(bytes);
+
+  return {
+    images: [{ bytes, mimeType: metadata.mimeType, width: metadata.width, height: metadata.height }],
+    providerRequestId: payload.request_id,
+    latencyMs: Date.now() - started,
+    rawModel: FAL_OBJECT_REMOVAL_MODEL,
+  };
+}
+
+function firstFalImage(payload: { image?: FalImageField; images?: FalImageField[] }) {
+  return payload.image ?? payload.images?.[0];
+}
+
+async function readFalImageBytes(image: FalImageField | undefined, signal: AbortSignal): Promise<Buffer> {
   const inline = image?.content ?? image?.file_data;
   if (typeof inline === "string" && inline.length > 0) {
     return Buffer.from(inline, "base64");

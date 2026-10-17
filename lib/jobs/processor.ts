@@ -1,6 +1,14 @@
 import { prisma } from "@/lib/db";
 import { isRetryableProviderCode, isRetryableProviderError } from "@/lib/ai/errors";
-import { getProviderTimeoutMs, resolveProvider, runGenerate, runRemoveBackground, runUpscale } from "@/lib/ai/factory";
+import {
+  getProviderTimeoutMs,
+  resolveProvider,
+  runEdit,
+  runGenerate,
+  runRemoveBackground,
+  runRemoveObject,
+  runUpscale,
+} from "@/lib/ai/factory";
 import { isImageOperation } from "@/lib/ai/types";
 import { detectImageMime, filenameForMime, isAllowedImageMime } from "@/lib/assets/mime";
 import { persistDerivedAsset, rollbackDerivedAsset } from "@/lib/assets/persist";
@@ -13,6 +21,7 @@ import { getEnv } from "@/lib/env";
 import { DomainError } from "@/lib/errors";
 import { logger } from "@/lib/logging";
 import { getStorage } from "@/lib/storage";
+import { assertCompatibleMask, assertMaskHasSelection } from "@/lib/assets/mask";
 import { assertOwnedStorageKey } from "@/lib/storage/keys";
 import type { ProviderResult } from "@/lib/ai/types";
 
@@ -64,7 +73,13 @@ export async function processJob(jobId: string) {
   });
 
   try {
-    if (job.operation !== "GENERATE" && job.operation !== "REMOVE_BACKGROUND" && job.operation !== "UPSCALE") {
+    if (
+      job.operation !== "GENERATE" &&
+      job.operation !== "REMOVE_BACKGROUND" &&
+      job.operation !== "UPSCALE" &&
+      job.operation !== "EDIT" &&
+      job.operation !== "REMOVE_OBJECT"
+    ) {
       throw new DomainError(
         isImageOperation(job.operation) ? "MODEL_CAPABILITY_UNSUPPORTED" : "VALIDATION",
         "Unsupported job operation",
@@ -80,6 +95,12 @@ export async function processJob(jobId: string) {
     }
     if (job.operation === "UPSCALE") {
       return await executeUpscale(job);
+    }
+    if (job.operation === "EDIT") {
+      return await executeEdit(job);
+    }
+    if (job.operation === "REMOVE_OBJECT") {
+      return await executeRemoveObject(job);
     }
     return await executeGenerate(job);
   } catch (error) {
@@ -323,6 +344,151 @@ async function executeUpscale(job: {
   }
 }
 
+async function executeEdit(job: {
+  id: string;
+  userId: string;
+  projectId: string | null;
+  providerId: string;
+  modelId: string;
+  inputJson: unknown;
+  attemptCount: number;
+}) {
+  const env = getEnv();
+  const prompt = readPrompt(job.inputJson);
+  const loaded = await loadOwnedImage(job.userId, job.projectId, readAssetId(job.inputJson));
+  const maskAssetId = readOptionalMaskAssetId(job.inputJson);
+  const mask = maskAssetId
+    ? await loadOwnedMask(job.userId, job.projectId, maskAssetId, loaded.source.width, loaded.source.height)
+    : null;
+
+  const provider = resolveProvider("EDIT", { providerId: job.providerId, modelId: job.modelId });
+  const result = await runEdit(
+    { prompt, image: loaded.bytes, mimeType: loaded.mime, mask: mask?.bytes },
+    AbortSignal.timeout(getProviderTimeoutMs(provider.providerId)),
+    { providerId: provider.providerId, modelId: provider.modelId },
+  );
+  return persistStudioDerivative(job, loaded.source, result, env, editedFilename(loaded.source.originalFilename));
+}
+
+async function executeRemoveObject(job: {
+  id: string;
+  userId: string;
+  projectId: string | null;
+  providerId: string;
+  modelId: string;
+  inputJson: unknown;
+  attemptCount: number;
+}) {
+  const env = getEnv();
+  const loaded = await loadOwnedImage(job.userId, job.projectId, readAssetId(job.inputJson));
+  const maskAssetId = readMaskAssetId(job.inputJson);
+  const mask = await loadOwnedMask(
+    job.userId,
+    job.projectId,
+    maskAssetId,
+    loaded.source.width,
+    loaded.source.height,
+  );
+  await assertMaskHasSelection(mask.bytes);
+
+  const provider = resolveProvider("REMOVE_OBJECT", { providerId: job.providerId, modelId: job.modelId });
+  const result = await runRemoveObject(
+    { image: loaded.bytes, mimeType: loaded.mime, mask: mask.bytes },
+    AbortSignal.timeout(getProviderTimeoutMs(provider.providerId)),
+    { providerId: provider.providerId, modelId: provider.modelId },
+  );
+  return persistStudioDerivative(
+    job,
+    loaded.source,
+    result,
+    env,
+    removedObjectFilename(loaded.source.originalFilename),
+  );
+}
+
+async function persistStudioDerivative(
+  job: { id: string; userId: string; projectId: string | null; attemptCount: number },
+  source: { id: string; originalFilename: string },
+  result: ProviderResult,
+  env: { MAX_UPLOAD_BYTES: number; MAX_IMAGE_PIXELS: number; MAX_IMAGE_EDGE_PX: number },
+  originalFilename: string,
+) {
+  const image = requireProviderImage(result);
+  const limits = {
+    maxUploadBytes: env.MAX_UPLOAD_BYTES,
+    maxImagePixels: env.MAX_IMAGE_PIXELS,
+    maxImageEdgePx: env.MAX_IMAGE_EDGE_PX,
+  };
+  assertResizeWithinLimits(image.width, image.height, limits);
+  const sanitized = await validateAndSanitizeImage(image.bytes, image.mimeType, limits);
+  await assertWithinQuota(job.userId, sanitized.bytes.byteLength);
+
+  const asset = await persistDerivedAsset({
+    userId: job.userId,
+    projectId: job.projectId,
+    kind: "DERIVATIVE",
+    mimeType: sanitized.mimeType,
+    bytes: sanitized.bytes,
+    width: sanitized.width,
+    height: sanitized.height,
+    originalFilename: filenameForMime(originalFilename, sanitized.mimeType),
+    sourceAssetId: source.id,
+    sourceJobId: job.id,
+  });
+
+  try {
+    return await markJobSucceeded(job, result, asset.id);
+  } catch (error) {
+    await rollbackDerivedAsset(job.userId, asset);
+    throw error;
+  }
+}
+
+async function loadOwnedImage(userId: string, projectId: string | null, assetId: string) {
+  const env = getEnv();
+  const source = await getOwnedAsset(userId, assetId);
+  if (projectId && source.projectId !== projectId) {
+    throw new DomainError("NOT_FOUND", "Asset not found", 404);
+  }
+  assertOwnedStorageKey(userId, source.storageKey);
+  const stored = await getStorage().getObject(source.storageKey);
+  if (!stored) {
+    throw new DomainError("ASSET_BYTES_MISSING", "The original file is no longer in storage", 404);
+  }
+  if (stored.body.byteLength > env.MAX_UPLOAD_BYTES) {
+    throw new DomainError("VALIDATION_FILE_TOO_LARGE", "The source file exceeds the size limit");
+  }
+  const detected = detectImageMime(stored.body);
+  if (!detected || !isAllowedImageMime(detected)) {
+    throw new DomainError("VALIDATION_INVALID_SIGNATURE", "The source file is not a JPEG, PNG, or WebP image");
+  }
+  return { source, bytes: stored.body, mime: detected };
+}
+
+async function loadOwnedMask(
+  userId: string,
+  projectId: string | null,
+  maskAssetId: string,
+  sourceWidth: number,
+  sourceHeight: number,
+) {
+  const env = getEnv();
+  const mask = await getOwnedAsset(userId, maskAssetId);
+  if (projectId && mask.projectId !== projectId) {
+    throw new DomainError("NOT_FOUND", "Asset not found", 404);
+  }
+  assertOwnedStorageKey(userId, mask.storageKey);
+  const stored = await getStorage().getObject(mask.storageKey);
+  if (!stored) {
+    throw new DomainError("ASSET_BYTES_MISSING", "The mask file is no longer in storage", 404);
+  }
+  if (stored.body.byteLength > env.MAX_UPLOAD_BYTES) {
+    throw new DomainError("VALIDATION_FILE_TOO_LARGE", "The mask file exceeds the size limit");
+  }
+  await assertCompatibleMask(stored.body, sourceWidth, sourceHeight);
+  return { source: mask, bytes: stored.body };
+}
+
 async function markJobSucceeded(
   job: { id: string; attemptCount: number },
   result: ProviderResult,
@@ -371,6 +537,14 @@ function upscaledFilename(originalFilename: string, scaleFactor: number) {
   return originalFilename.replace(/\.(jpe?g|png|webp)$/i, "") + `-${scaleFactor}x.png`;
 }
 
+function editedFilename(originalFilename: string) {
+  return originalFilename.replace(/\.(jpe?g|png|webp)$/i, "") + "-edit.png";
+}
+
+function removedObjectFilename(originalFilename: string) {
+  return originalFilename.replace(/\.(jpe?g|png|webp)$/i, "") + "-removed.png";
+}
+
 function readScaleFactor(inputJson: unknown) {
   if (typeof inputJson !== "object" || inputJson === null || !("scaleFactor" in inputJson)) {
     throw new DomainError("UNSUPPORTED_UPSCALE_FACTOR", "Upscale factor must be 2, 3, or 4");
@@ -380,6 +554,28 @@ function readScaleFactor(inputJson: unknown) {
     throw new DomainError("UNSUPPORTED_UPSCALE_FACTOR", "Upscale factor must be 2, 3, or 4");
   }
   return scaleFactor;
+}
+
+function readMaskAssetId(inputJson: unknown) {
+  const maskAssetId = readOptionalMaskAssetId(inputJson);
+  if (!maskAssetId) {
+    throw new DomainError("MASK_REQUIRED", "Object removal requires a PNG mask of the same size as the source");
+  }
+  return maskAssetId;
+}
+
+function readOptionalMaskAssetId(inputJson: unknown) {
+  if (typeof inputJson !== "object" || inputJson === null || !("maskAssetId" in inputJson)) {
+    return null;
+  }
+  const maskAssetId = (inputJson as { maskAssetId: unknown }).maskAssetId;
+  if (maskAssetId === undefined || maskAssetId === null) {
+    return null;
+  }
+  if (typeof maskAssetId !== "string" || maskAssetId.length < 8) {
+    throw new DomainError("VALIDATION", "Job is missing a mask");
+  }
+  return maskAssetId;
 }
 
 function readAssetId(inputJson: unknown) {

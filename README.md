@@ -4,7 +4,7 @@ Credit-metered AI image studio: generation, editing, enhancement, conversion, pr
 
 Phase 3 is live: authentication, owned projects, private uploads, PNG/JPEG/WebP conversion (original preserved), and asynchronous generate jobs. Live OpenAI generate has been verified in this environment. If `OPENAI_API_KEY` is unset, the API returns `PROVIDER_NOT_CONFIGURED` rather than a fake image. Credits and payments are not implemented.
 
-Phase 4.5 adds a provider-independent adapter layer. Phase 4.2 adds background-removal jobs (`REMOVE_BACKGROUND`) on owned images; the original is kept and the result is a private transparent PNG. Phase 4.3 adds upscale jobs (`UPSCALE`, factors 2 / 3 / 4) the same way; the original is kept and the result is a private larger `DERIVATIVE`. Tests use mock adapters. Live Fal is not invoked unless `FAL_KEY` is set and a user runs the job. Missing Fal in live mode is `PROVIDER_NOT_CONFIGURED`, not a Sharp stand-in.
+Phase 4.5 adds a provider-independent adapter layer. Phase 4.2 adds background-removal jobs (`REMOVE_BACKGROUND`) on owned images; the original is kept and the result is a private transparent PNG. Phase 4.3 adds upscale jobs (`UPSCALE`, factors 2 / 3 / 4) the same way; the original is kept and the result is a private larger `DERIVATIVE`. Phase 4.4 adds `EDIT` (text prompt, optional mask) and `REMOVE_OBJECT` (same-size PNG mask). Tests use mock adapters. Live OpenAI/Fal are not invoked unless the matching server key is set and a user runs the job. Missing keys in live mode return `PROVIDER_NOT_CONFIGURED`, not a Sharp stand-in.
 
 ## Requirements
 
@@ -39,7 +39,7 @@ Override with `SEED_ADMIN_PASSWORD` and `SEED_USER_PASSWORD`.
 | Command | Purpose |
 | --- | --- |
 | `pnpm dev` | Next.js on 127.0.0.1:43127 |
-| `pnpm worker` | BullMQ worker for generate, background-removal, and upscale jobs (requires `REDIS_URL`) |
+| `pnpm worker` | BullMQ worker for generate, background-removal, upscale, edit, and object-removal jobs (requires `REDIS_URL`) |
 | `pnpm db:migrate` | Create/apply Prisma migrations |
 | `pnpm db:seed` | Plans, settings, admin and user accounts |
 | `pnpm lint` | ESLint |
@@ -61,5 +61,5 @@ See `docs/` for architecture, database, providers, billing, security, deployment
 | Post-test audit | Complete — see docs/POST_TEST_AUDIT.md |
 | 2 Projects and assets | PASS |
 | 3 Converter and first AI job | PASS (live OpenAI generate verified) |
-| 4 AI image studio | 4.1 PASS. 4.5 PASS. 4.2 PASS (background removal). 4.3 PASS (upscale; mock tests, no live Fal). 4.4 and 4.6 not started. |
+| 4 AI image studio | 4.1 PASS. 4.5 PASS. 4.2 PASS (background removal). 4.3 PASS (upscale; mock tests, no live Fal). 4.4 PASS (edit / object removal; mock tests, no live OpenAI/Fal). 4.6 not started. |
 | 5–7 | Not started |

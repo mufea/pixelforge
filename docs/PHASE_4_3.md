@@ -86,6 +86,6 @@ No new Prisma migration.
 - Live Fal smoke (not run; no approval to spend Fal credits). Passing mock tests do not verify Fal quality or exact output dimensions.
 - Fal may return a size that is not exactly `scale ×` source; the worker accepts any result that is at least as large as the source and within caps.
 - Geometric Sharp upscale is **not** offered in live mode (overridden vs the original plan’s labeled fallback).
-- AI edit / object removal (4.4), credits (4.6)
+- AI edit / object removal (4.4 — implemented separately; see [PHASE_4_4.md](./PHASE_4_4.md)), credits (4.6)
 - CONVERT as a BullMQ job
 - `Provider` / `AIModel` tables
