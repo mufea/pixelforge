@@ -27,6 +27,22 @@ This plan depends on the recovered Phase 4.6 ledger (`CreditAccount`, append-onl
 7. **Refunds.** Provider refund webhook writes a new ledger `release` or a dedicated `refund` reason (additive; do not update old grant rows). Do not auto-delete jobs or assets.
 8. **Tests.** Mock Stripe/Midtrans HTTP. Cover signature rejection, duplicate webhook, amount mismatch, and unauthorized checkout. No live charges in `pnpm test`.
 
+## Dependency chain (do not invert)
+
+```
+browser checkout request
+  → server creates Payment (pending); no credits yet
+  → Stripe/Midtrans confirmation (webhook signature or Get Status)
+  → insert WebhookEvent (unique provider + externalEventId)
+  → grantCredits(userId, package.credits, `pay:${payment.id}`)
+  → CreditAccount.availableCredits increases
+  → later job reserve/settle uses the same ledger
+```
+
+Subscription entitlements are a later `Plan` grant on the same `CreditAccount`. They must also use a unique grant idempotency key (`plan:${subscriptionId}:${periodStart}`). A second webhook delivery, a second admin grant with the same key, or a replayed checkout must not add credits again.
+
+PixelForge startup does **not** require `STRIPE_*` or `MIDTRANS_*`. Empty payment keys only mean checkout is unavailable. Do not treat a browser success URL as a grant.
+
 ## Prerequisites before coding that slice
 
 - Credit ledger tests still green on this branch

@@ -46,6 +46,7 @@ Override with `SEED_ADMIN_PASSWORD` and `SEED_USER_PASSWORD`.
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm test` | Vitest unit and integration tests (does not call live providers) |
 | `pnpm test:live` | Opt-in Fal/Stability smokes; requires `PIXELFORGE_LIVE_PROVIDERS=1` and keys |
+| `pnpm preflight` | Non-destructive deploy config check (add `--connect` to ping Postgres/Redis) |
 | `pnpm build` | Production build |
 | `pnpm start` | Serve the production build |
 
@@ -62,5 +63,5 @@ See `docs/` for architecture, database, providers, billing, security, deployment
 | Post-test audit | Complete — see docs/POST_TEST_AUDIT.md |
 | 2 Projects and assets | PASS |
 | 3 Converter and first AI job | PASS (live OpenAI generate verified) |
-| 4 AI image studio | 4.1–4.5 PASS. 4.6 credits recovered onto this branch (no payments). 4.7 Fal official client + Stability + Render Blueprint (mock tests; not live-verified). 4.8 credit recovery, Fal edit/i2i, ZIP export, Next.js 16.4.1 (mock tests; live providers and Render not verified). |
+| 4 AI image studio | 4.1–4.5 PASS. 4.6 credits recovered onto this branch (no payments). 4.7 Fal official client + Stability + Render Blueprint (mock tests; not live-verified). 4.8 credit recovery, Fal edit/i2i, ZIP export, Next.js 16.4.1. 4.9 local production-readiness (preflight, worker boot, credit/storage hold); live providers and Render still not verified. |
 | 5–7 | Not started |

@@ -95,7 +95,7 @@ in transaction:
     reservation released
 ```
 
-Interrupted workers: `processJob` reclaims `queued` / retryable `failed` / `processing` past `timeoutAt`. A committed job that was never published to Redis stays `queued` with a pending reservation; call `processJob` or `enqueueJob` with the same id. Timeouts and other retryable provider codes keep the hold. After the attempt cap those jobs may be `failed` while the reservation stays `pending` for reconciliation — they are not auto-refunded. Recovery must not settle twice.
+Interrupted workers: `processJob` reclaims `queued` / retryable `failed` / `processing` past `timeoutAt`. A committed job that was never published to Redis stays `queued` with a pending reservation; call `processJob` or `enqueueJob` with the same id. Timeouts, other retryable provider codes, and storage failures (`STORAGE_UNAVAILABLE`, `STORAGE_NOT_CONFIGURED`) keep the hold. That includes the case where the provider already returned bytes and private storage then rejected the write: do not settle and do not release. After the attempt cap those jobs may be `failed` while the reservation stays `pending` for reconciliation — they are not auto-refunded. Recovery must not settle twice. This is the existing D4 release policy applied to infrastructure failures; credit prices are unchanged.
 
 ## Analytics
 

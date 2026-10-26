@@ -31,6 +31,8 @@ No extra web/worker duplicates. Object storage is **not** a Render disk: product
 
 Blueprint-wired (not in the secret group): `DATABASE_URL`, `REDIS_URL`, `NODE_ENV=production`.
 
+Local readiness (does not create Render resources): `pnpm preflight` and, against a local or explicitly approved database/Redis, `pnpm preflight --connect`. See [ENV_MATRIX.md](./ENV_MATRIX.md) and [RENDER_RUNBOOK.md](./RENDER_RUNBOOK.md).
+
 ## Commands (after a human creates the Blueprint)
 
 ```bash
