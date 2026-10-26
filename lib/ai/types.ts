@@ -1,4 +1,4 @@
-export const PROVIDER_IDS = ["mock", "openai", "fal", "google"] as const;
+export const PROVIDER_IDS = ["mock", "openai", "fal", "google", "stability"] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
 
 export const IMAGE_OPERATIONS = [

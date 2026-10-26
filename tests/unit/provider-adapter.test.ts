@@ -29,6 +29,7 @@ function liveEnv(overrides: Record<string, string> = {}) {
   vi.stubEnv("FAL_KEY", "");
   vi.stubEnv("FAL_API_KEY", "");
   vi.stubEnv("GOOGLE_AI_API_KEY", "");
+  vi.stubEnv("STABILITY_API_KEY", "");
   for (const [key, value] of Object.entries(overrides)) {
     vi.stubEnv(key, value);
   }
@@ -92,7 +93,7 @@ describe("provider adapter architecture", () => {
     it("does not register Sharp convert as an AI operation", () => {
       expect((IMAGE_OPERATIONS as readonly string[]).includes("CONVERT")).toBe(false);
       expect(MODEL_CATALOG.map((model) => model.providerId)).toEqual(
-        expect.arrayContaining(["mock", "openai", "fal", "google"]),
+        expect.arrayContaining(["mock", "openai", "fal", "google", "stability"]),
       );
     });
   });
@@ -253,8 +254,12 @@ describe("provider adapter architecture", () => {
 
     it("returns MODEL_DISABLED for catalog stubs that are not implemented yet", () => {
       liveEnv({ FAL_KEY: "fal_sk_test_not_real" });
+      expect(resolveProvider("GENERATE", { providerId: "fal" })).toEqual({
+        providerId: "fal",
+        modelId: "fal-ai/flux/schnell",
+      });
       try {
-        resolveProvider("GENERATE", { providerId: "fal" });
+        resolveProvider("GENERATE", { providerId: "fal", modelId: "fal-ai/flux-2-pro" });
         throw new Error("expected failure");
       } catch (error) {
         expect(error).toMatchObject({ code: "MODEL_DISABLED" });

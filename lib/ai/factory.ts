@@ -7,11 +7,18 @@ import {
   isProviderConfigured,
 } from "@/lib/ai/config";
 import { normalizeProviderError } from "@/lib/ai/errors";
-import { falRemoveBackground, falRemoveObject, falUnimplemented, falUpscale } from "@/lib/ai/providers/fal";
+import { falGenerate, falRemoveBackground, falRemoveObject, falUnimplemented, falUpscale } from "@/lib/ai/providers/fal";
 import { googleUnimplemented } from "@/lib/ai/providers/google";
 import { mockEdit, mockGenerate, mockRemoveBackground, mockRemoveObject, mockUpscale } from "@/lib/ai/providers/mock";
 import { openaiEdit } from "@/lib/ai/providers/openai-edit";
 import { openaiGenerate } from "@/lib/ai/providers/openai-generate";
+import {
+  stabilityEdit,
+  stabilityGenerate,
+  stabilityRemoveBackground,
+  stabilityRemoveObject,
+  stabilityUpscale,
+} from "@/lib/ai/providers/stability";
 import { assertOperationSupported, defaultModelFor, getModel, getProviderEntry } from "@/lib/ai/registry";
 import {
   isProviderId,
@@ -75,9 +82,19 @@ function defaultModelId(providerId: ProviderId) {
     case "google":
       return "gemini-nano-banana-2.1";
     case "fal":
-      return "fal-ai/flux-2-pro";
+      return "fal-ai/flux/schnell";
+    case "stability":
+      return "stability-image-ultra";
   }
 }
+
+const AUTO_PROVIDER_ORDER: Record<ImageOperation, ProviderId[]> = {
+  GENERATE: ["openai", "fal", "stability"],
+  EDIT: ["openai", "stability"],
+  REMOVE_BACKGROUND: ["fal", "stability"],
+  UPSCALE: ["fal", "stability"],
+  REMOVE_OBJECT: ["fal", "stability"],
+};
 
 function resolveAutomatic(operation: ImageOperation): ResolvedProvider {
   const config = getProviderRuntimeConfig();
@@ -87,16 +104,13 @@ function resolveAutomatic(operation: ImageOperation): ResolvedProvider {
       return { providerId: "mock", modelId: mock.modelId };
     }
   }
-  if (operation === "GENERATE" && config.openai.configured) {
-    return { providerId: "openai", modelId: "gpt-image-2.5-flare" };
-  }
-  if (operation === "EDIT" && config.openai.configured) {
-    return { providerId: "openai", modelId: "gpt-image-2.5-flare" };
-  }
-  if ((operation === "REMOVE_BACKGROUND" || operation === "UPSCALE" || operation === "REMOVE_OBJECT") && config.fal.configured) {
-    const fal = defaultModelFor("fal", operation);
-    if (fal) {
-      return { providerId: "fal", modelId: fal.modelId };
+  for (const providerId of AUTO_PROVIDER_ORDER[operation]) {
+    if (!isProviderConfigured(providerId)) {
+      continue;
+    }
+    const model = defaultModelFor(providerId, operation);
+    if (model) {
+      return { providerId, modelId: model.modelId };
     }
   }
   if (operation === "GENERATE") {
@@ -117,16 +131,8 @@ function resolveAutomatic(operation: ImageOperation): ResolvedProvider {
   throw new DomainError("MODEL_CAPABILITY_UNSUPPORTED", `Operation ${operation} is not implemented`, 400);
 }
 
-export function resolveGenerateProvider(explicit?: ProviderId | string): "mock" | "openai" {
-  const resolved = resolveProvider("GENERATE", explicit ? { providerId: explicit } : {});
-  if (resolved.providerId !== "mock" && resolved.providerId !== "openai") {
-    throw new DomainError(
-      "MODEL_CAPABILITY_UNSUPPORTED",
-      `Provider ${resolved.providerId} does not implement GENERATE`,
-      400,
-    );
-  }
-  return resolved.providerId;
+export function resolveGenerateProvider(explicit?: ProviderId | string): ProviderId {
+  return resolveProvider("GENERATE", explicit ? { providerId: explicit } : {}).providerId;
 }
 
 export function getGenerationAdapter(selection: ProviderSelection = {}): ImageGenerationAdapter {
@@ -138,7 +144,10 @@ export function getGenerationAdapter(selection: ProviderSelection = {}): ImageGe
     return { providerId: "openai", modelId: resolved.modelId, generate: openaiGenerate };
   }
   if (resolved.providerId === "fal") {
-    return falUnimplemented("GENERATE");
+    return { providerId: "fal", modelId: resolved.modelId, generate: falGenerate };
+  }
+  if (resolved.providerId === "stability") {
+    return { providerId: "stability", modelId: resolved.modelId, generate: stabilityGenerate };
   }
   return googleUnimplemented("GENERATE");
 }
@@ -163,6 +172,9 @@ export function getBackgroundRemovalAdapter(selection: ProviderSelection = {}): 
   }
   if (resolved.providerId === "fal") {
     return { providerId: "fal", modelId: resolved.modelId, removeBackground: falRemoveBackground };
+  }
+  if (resolved.providerId === "stability") {
+    return { providerId: "stability", modelId: resolved.modelId, removeBackground: stabilityRemoveBackground };
   }
   throw new DomainError(
     "MODEL_CAPABILITY_UNSUPPORTED",
@@ -205,7 +217,7 @@ export function generateUnavailableReason(): string | null {
   if (!config.jobsEnabled) {
     return "AI jobs are temporarily disabled.";
   }
-  return "OpenAI is not configured. Set OPENAI_API_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests.";
+  return "No image generation provider is configured. Set OPENAI_API_KEY, FAL_KEY, or STABILITY_API_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests.";
 }
 
 export function getUpscaleAdapter(selection: ProviderSelection = {}): UpscaleAdapter {
@@ -215,6 +227,9 @@ export function getUpscaleAdapter(selection: ProviderSelection = {}): UpscaleAda
   }
   if (resolved.providerId === "fal") {
     return { providerId: "fal", modelId: resolved.modelId, upscale: falUpscale };
+  }
+  if (resolved.providerId === "stability") {
+    return { providerId: "stability", modelId: resolved.modelId, upscale: stabilityUpscale };
   }
   throw new DomainError(
     "MODEL_CAPABILITY_UNSUPPORTED",
@@ -257,7 +272,7 @@ export function removeBackgroundUnavailableReason(): string | null {
   if (!config.jobsEnabled) {
     return "AI jobs are temporarily disabled.";
   }
-  return "Fal is not configured. Set FAL_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests.";
+  return "No background removal provider is configured. Set FAL_KEY or STABILITY_API_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests.";
 }
 
 export function isUpscaleAvailable(): boolean {
@@ -281,7 +296,7 @@ export function upscaleUnavailableReason(): string | null {
   if (!config.jobsEnabled) {
     return "AI jobs are temporarily disabled.";
   }
-  return "Fal is not configured. Set FAL_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests.";
+  return "No upscale provider is configured. Set FAL_KEY or STABILITY_API_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests.";
 }
 
 export function getEditAdapter(selection: ProviderSelection = {}): ImageEditAdapter {
@@ -291,6 +306,12 @@ export function getEditAdapter(selection: ProviderSelection = {}): ImageEditAdap
   }
   if (resolved.providerId === "openai") {
     return { providerId: "openai", modelId: resolved.modelId, edit: openaiEdit };
+  }
+  if (resolved.providerId === "stability") {
+    return { providerId: "stability", modelId: resolved.modelId, edit: stabilityEdit };
+  }
+  if (resolved.providerId === "fal") {
+    return falUnimplemented("EDIT");
   }
   throw new DomainError(
     "MODEL_CAPABILITY_UNSUPPORTED",
@@ -333,7 +354,7 @@ export function editUnavailableReason(): string | null {
   if (!config.jobsEnabled) {
     return "AI jobs are temporarily disabled.";
   }
-  return "OpenAI is not configured. Set OPENAI_API_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests.";
+  return "No image editing provider is configured. Set OPENAI_API_KEY or STABILITY_API_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests.";
 }
 
 export function getObjectRemovalAdapter(selection: ProviderSelection = {}): ObjectRemovalAdapter {
@@ -343,6 +364,9 @@ export function getObjectRemovalAdapter(selection: ProviderSelection = {}): Obje
   }
   if (resolved.providerId === "fal") {
     return { providerId: "fal", modelId: resolved.modelId, removeObject: falRemoveObject };
+  }
+  if (resolved.providerId === "stability") {
+    return { providerId: "stability", modelId: resolved.modelId, removeObject: stabilityRemoveObject };
   }
   throw new DomainError(
     "MODEL_CAPABILITY_UNSUPPORTED",
@@ -385,7 +409,7 @@ export function removeObjectUnavailableReason(): string | null {
   if (!config.jobsEnabled) {
     return "AI jobs are temporarily disabled.";
   }
-  return "Fal is not configured. Set FAL_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests.";
+  return "No object removal provider is configured. Set FAL_KEY or STABILITY_API_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests.";
 }
 
 export { getProviderTimeoutMs };

@@ -1,0 +1,54 @@
+# Render Blueprint for PixelForge AI.
+# Does not deploy by itself. Create the Blueprint from the Render dashboard
+# and fill the secret env group. Never commit real credentials.
+#
+# Production storage must be S3-compatible (R2, AWS S3, or hosted MinIO).
+# Render disks are ephemeral and must not hold user assets.
+
+services:
+  - type: web
+    name: pixelforge-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pixelforge-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: pixelforge-redis
+          type: keyvalue
+          property: connectionString
+      - fromGroup: pixelforge-secrets
+
+  - type: worker
+    name: pixelforge-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile.worker
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pixelforge-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: pixelforge-redis
+          type: keyvalue
+          property: connectionString
+      - fromGroup: pixelforge-secrets
+
+  - type: keyvalue
+    name: pixelforge-redis
+    plan: starter
+    ipAllowList: []
+
+databases:
+  - name: pixelforge-postgres
+    plan: basic-256mb
+    postgresMajorVersion: "16"

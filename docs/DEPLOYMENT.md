@@ -42,12 +42,40 @@ Load balancer / TLS
 
 Environment-specific files: never bake production URLs into the image. Pass `APP_URL`, `DATABASE_URL`, `REDIS_URL`, `S3_*`, and provider keys at runtime.
 
+## Render.com
+
+`render.yaml` is a Blueprint for a Docker **web** service, a Docker **worker**, Render Postgres 16, and Render Key Value (Redis). It does not deploy the app by itself.
+
+Required env group `pixelforge-secrets` (never commit values):
+
+| Variable | Notes |
+| --- | --- |
+| `APP_URL` | Public HTTPS origin, e.g. `https://pixelforge-web.onrender.com` |
+| `BETTER_AUTH_SECRET` | 32+ characters |
+| `BETTER_AUTH_URL` | Same as `APP_URL` |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Durable object storage. Required in production. |
+| `S3_REGION`, `S3_FORCE_PATH_STYLE` | Match the bucket provider |
+| `FAL_KEY` | Optional. Enables Fal-backed jobs |
+| `STABILITY_API_KEY` | Optional. Enables Stability-backed jobs |
+| `OPENAI_API_KEY` | Optional. Existing generate/edit path |
+| `AI_JOBS_ENABLED` | `true` only after worker + Redis + storage are up |
+
+`DATABASE_URL` and `REDIS_URL` are wired from the Blueprint services. The web container listens on Render's `PORT`. Liveness is `GET /api/health`. Readiness is `GET /api/health/ready` (Postgres, optional Redis ping, storage driver). Secrets are never included.
+
+Migrate **once** before or immediately after the first web deploy, from a Render one-off or shell:
+
+```bash
+pnpm prisma migrate deploy
+```
+
+Do not use local disk (`.storage`) on Render. Do not claim this Blueprint is live until a human creates the services and a health check returns 200.
+
 ## Required managed services
 
 | Concern | Local | Production |
 | --- | --- | --- |
 | PostgreSQL | Compose | RDS, Cloud SQL, Neon, Supabase, or equivalent |
-| Redis | Compose | ElastiCache, Redis Cloud, Upstash (if latency/queue semantics are acceptable) |
+| Redis | Compose | Render Key Value, ElastiCache, Redis Cloud, Upstash (if latency/queue semantics are acceptable) |
 | Object storage | MinIO | S3 / R2 / GCS |
 | Email | Console log | Resend or SMTP |
 | Secrets | `.env.local` | Platform secret store |
@@ -84,4 +112,4 @@ Images: `Dockerfile` (Next.js standalone) and `Dockerfile.worker`. Both include 
 
 ## What will not be claimed until it exists
 
-This file describes the intended operations model. Dockerfiles, Compose, health routes, and backup runbooks are Phase 1 and Phase 7 work.
+Dockerfiles, Compose, health routes, and `render.yaml` exist. A live Render deploy has **not** been performed from this slice. Backup/PITR runbooks remain Phase 7.

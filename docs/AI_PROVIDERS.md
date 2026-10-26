@@ -4,7 +4,7 @@ Adapters sit behind operation interfaces. The UI and job worker never call vendo
 
 Live HTTP calls happen only when the matching server-side API key is set **and** `AI_PROVIDER_MODE` is not `mock`. Mock adapters are compiled for tests and for development when `AI_PROVIDER_MODE=mock` (ignored in production). A passing mock test does not verify a real integration.
 
-Phase 4.5 shipped the registry, factory, normalized errors, and centralized secret access. Sharp convert/resize/crop stays in `lib/images` and is not an AI provider. Phase 4.2 enables `REMOVE_BACKGROUND` through that factory: mock in tests, Fal `fal-ai/bria/background/remove` when `FAL_KEY` is set. Phase 4.3 enables `UPSCALE` the same way: mock nearest-neighbor in tests, Fal `fal-ai/flux-vision-upscaler` when `FAL_KEY` is set. Phase 4.4 enables `EDIT` (OpenAI `/v1/images/edits`, `gpt-image-2.5-flare`) and `REMOVE_OBJECT` (Fal `fal-ai/object-removal/mask`). Live mode never substitutes Sharp when a key is missing. Google remains a stub.
+Phase 4.5 shipped the registry, factory, normalized errors, and centralized secret access. Sharp convert/resize/crop stays in `lib/images` and is not an AI provider. Phase 4.2–4.4 enable Fal background removal, Fal upscale, OpenAI edit, and Fal object removal. Phase 4.7 routes Fal through the official `@fal-ai/client` queue subscribe helper and adds Stability AI REST v2beta adapters. Live mode never substitutes Sharp when a key is missing. Google remains a stub. There is **no** automatic fallback from a failed Fal call to Stability (or the reverse). Auto-select only picks the first configured provider for that operation.
 
 Sources checked on 14 October 2026:
 
@@ -63,15 +63,15 @@ Each adapter must:
 
 ## Capability matrix (documentation-verified, not live-tested)
 
-| Operation | OpenAI | Google Gemini | Fal AI | Sharp (local) |
-| --- | --- | --- | --- | --- |
-| Text-to-image | `gpt-image-2.5-sunburst`, `gpt-image-2.5-flare`; `gpt-image-2` still listed | `gemini-nano-banana-2.1` via `generateContent` | `fal-ai/flux-2-pro` | No |
-| Image-to-image / edit | Images edits + reference images; mask inpainting supported | Conversational edit with image parts | FLUX.2 [pro] edit endpoints | No |
-| Inpaint / mask | Yes (image + mask) | Not assumed; UI must hide if registry says no | `fal-ai/flux-pro/v1/fill`, `fal-ai/object-removal/mask` | No |
-| Background removal | Not a dedicated API | Not a dedicated API | `fal-ai/bria/background/remove`, BiRefNet | No |
-| Upscale | Not a dedicated API | Not a dedicated API | `fal-ai/flux-vision-upscaler`, `fal-ai/topaz/upscale/image` | Geometric resize only, labeled as non-AI |
-| Object removal | Possible via masked edit, not a dedicated erase API | Not assumed | `fal-ai/object-removal/mask`, `fal-ai/flux-pro/v1/erase` | No |
-| Convert / resize / crop / compress | No | No | No | Yes |
+| Operation | OpenAI | Google Gemini | Fal AI | Stability AI | Sharp (local) |
+| --- | --- | --- | --- | --- | --- |
+| Text-to-image | `gpt-image-2.5-flare` | stub | `fal-ai/flux/schnell` (implemented). `fal-ai/flux-2-pro` remains a disabled stub | `POST /v2beta/stable-image/generate/ultra` | No |
+| Image-to-image / edit | Images edits + optional mask | stub | Fal EDIT is **not** implemented | `POST /v2beta/stable-image/edit/inpaint` | No |
+| Inpaint / mask | Yes (image + mask) | Not assumed | `fal-ai/object-removal/mask` | Inpaint + erase | No |
+| Background removal | Not a dedicated API | Not a dedicated API | `fal-ai/bria/background/remove` | `POST /v2beta/stable-image/edit/remove-background` | No |
+| Upscale | Not a dedicated API | Not a dedicated API | `fal-ai/flux-vision-upscaler` factors 2\|3\|4 | Fast upscale is **4× only** | Geometric resize only, labeled as non-AI |
+| Object removal | Possible via masked edit, not a dedicated erase API | Not assumed | `fal-ai/object-removal/mask` | `POST /v2beta/stable-image/edit/erase` | No |
+| Convert / resize / crop / compress | No | No | No | No | Yes |
 
 If the selected model does not list the operation, the API returns `MODEL_CAPABILITY_UNSUPPORTED` and the UI explains that the user should pick another enabled model.
 
@@ -92,16 +92,30 @@ If the selected model does not list the operation, the API returns `MODEL_CAPABI
 
 ## Fal notes
 
-Fal is queue-oriented. The worker should use the official client with a timeout, then download the result URL into our bucket. Fal result URLs are not a substitute for first-party storage.
+Fal is queue-oriented. Adapters call `@fal-ai/client` `subscribe` (queue + poll) through `lib/ai/providers/fal-client.ts`, then download result URLs from `fal.media` only. Fal result URLs are not a substitute for first-party storage. The official JS client is documented at [fal.ai client setup](https://fal.ai/docs/documentation/model-apis/inference/client-setup).
 
-Proposed first Fal models (IDs confirmed on fal.ai pages, access not verified):
+| Role | Model ID | Inputs | Output | Notes |
+| --- | --- | --- | --- | --- |
+| Generation | `fal-ai/flux/schnell` | `{ prompt }` | PNG/JPEG/WebP bytes | Verified against official client docs. Metered by Fal account. |
+| Generation stub | `fal-ai/flux-2-pro` | — | — | Disabled until the current schema is confirmed live |
+| Background removal | `fal-ai/bria/background/remove` | `{ image_url }` data URI | Transparent PNG | Implemented |
+| Object removal | `fal-ai/object-removal/mask` | `{ image_url, mask_url }` | PNG | Implemented |
+| Upscale | `fal-ai/flux-vision-upscaler` | `{ image_url, upscale_factor }` 2\|3\|4 | PNG | Implemented |
+| Edit | — | — | — | Not implemented; do not silently use another Fal model |
 
-| Role | Model ID |
-| --- | --- |
-| Generation | `fal-ai/flux-2-pro` |
-| Background removal | `fal-ai/bria/background/remove` |
-| Object removal (mask) | `fal-ai/object-removal/mask` (implemented in 4.4: `POST https://fal.run/fal-ai/object-removal/mask`, `{ image_url, mask_url }`; response `images[]`) |
-| Upscale | `fal-ai/flux-vision-upscaler` (implemented in 4.3: `POST https://fal.run/fal-ai/flux-vision-upscaler`, `{ image_url, upscale_factor }`; app factors 2\|3\|4 only) |
+## Stability notes
+
+Stability uses REST v2beta at `https://api.stability.ai` with `Authorization: Bearer $STABILITY_API_KEY` and `multipart/form-data`. Docs: [Stable Image Ultra](https://docs.stability.ai/api-reference/generate/stable-image-ultra), [Inpaint](https://docs.stability.ai/api-reference/edit/inpaint), [Erase](https://docs.stability.ai/api-reference/edit/erase), [Remove Background](https://docs.stability.ai/api-reference/edit/remove-background), [Fast Upscale](https://docs.stability.ai/api-reference/upscale/fast).
+
+| Catalog model ID | Endpoint | Operation | Required inputs | Limits |
+| --- | --- | --- | --- | --- |
+| `stability-image-ultra` | `/v2beta/stable-image/generate/ultra` | GENERATE | `prompt` | ~1 MP output. Vendor: 8 credits / success |
+| `stability-image-inpaint` | `/v2beta/stable-image/edit/inpaint` | EDIT | `image`, `prompt`; optional `mask` | ~4 MP output. Vendor: 5 credits / success |
+| `stability-remove-background` | `/v2beta/stable-image/edit/remove-background` | REMOVE_BACKGROUND | `image` | PNG |
+| `stability-erase` | `/v2beta/stable-image/edit/erase` | REMOVE_OBJECT | `image`, `mask` | Mask white = erase |
+| `stability-upscale-fast` | `/v2beta/stable-image/upscale/fast` | UPSCALE | `image` | **4× only**. Factors 2 and 3 are rejected |
+
+Accept header is `application/json` so the adapter can read `finish_reason`. `CONTENT_FILTERED` maps to `SAFETY_REJECTED`. Binary `image/*` responses are also accepted. Vendor credits are **not** our integer user ledger. User billing remains the existing (still-unmerged on this branch) reservation path.
 
 Additional Fal models require the same doc check plus a cost entry before enablement.
 

@@ -34,6 +34,7 @@ const nextConfig: NextConfig = {
     "sharp",
     "bullmq",
     "ioredis",
+    "@fal-ai/client",
   ],
   turbopack: {
     rules: {

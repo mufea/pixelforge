@@ -68,10 +68,22 @@ export async function domainErrorFromProviderResponse(response: Response): Promi
 
 export async function providerErrorMessage(response: Response) {
   try {
-    const payload = (await response.json()) as { error?: { message?: unknown } };
-    const message = payload.error?.message;
-    if (typeof message === "string" && message.trim().length > 0) {
-      return message.trim().slice(0, 280);
+    const payload = (await response.json()) as {
+      error?: { message?: unknown };
+      name?: unknown;
+      message?: unknown;
+      errors?: unknown;
+    };
+    const candidates = [
+      payload.error?.message,
+      payload.message,
+      payload.name,
+      Array.isArray(payload.errors) ? payload.errors.find((item) => typeof item === "string") : undefined,
+    ];
+    for (const message of candidates) {
+      if (typeof message === "string" && message.trim().length > 0) {
+        return message.trim().slice(0, 280);
+      }
     }
   } catch {
     // Fall through to the generic message; never include credentials or raw bodies.

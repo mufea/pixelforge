@@ -34,6 +34,7 @@ const envSchema = z.object({
   GOOGLE_AI_API_KEY: optionalString,
   FAL_KEY: optionalString,
   FAL_API_KEY: optionalString,
+  STABILITY_API_KEY: optionalString,
   STRIPE_SECRET_KEY: optionalString,
   STRIPE_WEBHOOK_SECRET: optionalString,
   STRIPE_PUBLISHABLE_KEY: optionalString,
@@ -63,6 +64,12 @@ const envSchema = z.object({
   GOOGLE_AI_BASE_URL: z.string().default("https://generativelanguage.googleapis.com"),
   GOOGLE_AI_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   FAL_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  STABILITY_BASE_URL: z.string().default("https://api.stability.ai"),
+  STABILITY_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  PORT: z.preprocess((value) => {
+    if (value === undefined || value === "") return undefined;
+    return value;
+  }, z.coerce.number().int().positive().optional()),
   AI_JOBS_ENABLED: z
     .enum(["true", "false"])
     .optional()
@@ -111,6 +118,10 @@ export function isOpenAIConfigured(env: Pick<AppEnv, "OPENAI_API_KEY"> = getEnv(
 
 export function isFalConfigured(env: Pick<AppEnv, "FAL_KEY"> = getEnv()): boolean {
   return Boolean(env.FAL_KEY);
+}
+
+export function isStabilityConfigured(env: Pick<AppEnv, "STABILITY_API_KEY"> = getEnv()): boolean {
+  return Boolean(env.STABILITY_API_KEY);
 }
 
 export function isGoogleAiConfigured(env: Pick<AppEnv, "GOOGLE_AI_API_KEY"> = getEnv()): boolean {

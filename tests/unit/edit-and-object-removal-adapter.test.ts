@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
 import { getEditAdapter, getObjectRemovalAdapter, runEdit, runRemoveObject } from "@/lib/ai/factory";
 import { falRemoveObject, FAL_OBJECT_REMOVAL_MODEL } from "@/lib/ai/providers/fal";
+import { setFalSubscriberForTests } from "@/lib/ai/providers/fal-client";
 import { mockEdit, mockRemoveObject } from "@/lib/ai/providers/mock";
 import { openaiEdit, OPENAI_EDIT_MODEL } from "@/lib/ai/providers/openai-edit";
 import { resetEnvCache } from "@/lib/env";
@@ -47,6 +48,7 @@ function liveFal() {
 
 describe("edit and object-removal adapters", () => {
   afterEach(() => {
+    setFalSubscriberForTests(null);
     resetEnvCache();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
@@ -138,24 +140,18 @@ describe("edit and object-removal adapters", () => {
     const source = await sourcePng();
     const mask = await selectionMask();
     const output = await sourcePng();
-    const fetchSpy = vi.fn(async (url: string, init?: RequestInit) => {
-      expect(String(url)).toBe(`https://fal.run/${FAL_OBJECT_REMOVAL_MODEL}`);
-      const body = JSON.parse(String(init?.body)) as { image_url: string; mask_url: string };
-      expect(body.image_url.startsWith("data:image/png;base64,")).toBe(true);
-      expect(body.mask_url.startsWith("data:image/png;base64,")).toBe(true);
-      return new Response(
-        JSON.stringify({
-          images: [{ url: "https://v3.fal.media/files/out.png", content: output.toString("base64") }],
-          request_id: "obj_1",
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
+    setFalSubscriberForTests(async (modelId, input) => {
+      expect(modelId).toBe(FAL_OBJECT_REMOVAL_MODEL);
+      expect(String(input.image_url).startsWith("data:image/png;base64,")).toBe(true);
+      expect(String(input.mask_url).startsWith("data:image/png;base64,")).toBe(true);
+      return {
+        data: { images: [{ url: "https://v3.fal.media/files/out.png", content: output.toString("base64") }] },
+        requestId: "obj_1",
+      };
     });
-    vi.stubGlobal("fetch", fetchSpy);
     const result = await falRemoveObject({ image: source, mimeType: "image/png", mask }, AbortSignal.timeout(1000));
     expect(result.rawModel).toBe(FAL_OBJECT_REMOVAL_MODEL);
     expect(result.providerRequestId).toBe("obj_1");
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
   it("maps OpenAI and Fal 429/timeouts without live calls", async () => {
@@ -168,16 +164,13 @@ describe("edit and object-removal adapters", () => {
 
     liveFal();
     const mask = await selectionMask();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((_url: string, init?: RequestInit) => {
-        return new Promise((_resolve, reject) => {
-          init?.signal?.addEventListener("abort", () => {
-            reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
-          });
+    setFalSubscriberForTests(async (_model, _input, signal) => {
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () => {
+          reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
         });
-      }),
-    );
+      });
+    });
     await expect(
       falRemoveObject({ image: source, mimeType: "image/png", mask }, AbortSignal.timeout(1)),
     ).rejects.toMatchObject({ code: "TIMEOUT" });
@@ -187,19 +180,14 @@ describe("edit and object-removal adapters", () => {
     liveFal();
     const source = await sourcePng();
     const mask = await selectionMask();
-    const fetchSpy = vi.fn(async (url: string) => {
-      if (String(url).includes("fal.run")) {
-        return new Response(JSON.stringify({ images: [{ url: "https://evil.example/x.png" }] }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      return new Response("nope", { status: 200 });
-    });
+    setFalSubscriberForTests(async () => ({
+      data: { images: [{ url: "https://evil.example/x.png" }] },
+    }));
+    const fetchSpy = vi.fn(async () => new Response("nope", { status: 200 }));
     vi.stubGlobal("fetch", fetchSpy);
     await expect(falRemoveObject({ image: source, mimeType: "image/png", mask }, AbortSignal.timeout(1000))).rejects.toMatchObject({
       code: "PROVIDER_REJECTED",
     });
-    expect(fetchSpy.mock.calls.some((call) => String(call[0]).includes("evil.example"))).toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

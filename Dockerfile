@@ -25,5 +25,6 @@ COPY --from=build /app/public ./public
 COPY --from=build /app/generated ./generated
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/prisma.config.ts ./prisma.config.ts
+ENV PORT=43127
 EXPOSE 43127
-CMD ["pnpm", "start", "--", "--hostname", "0.0.0.0", "--port", "43127"]
+CMD ["sh", "-c", "pnpm exec next start --hostname 0.0.0.0 --port ${PORT:-43127}"]

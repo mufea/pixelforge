@@ -9,6 +9,7 @@ import { completeUpload, createUploadIntent, getOwnedAsset } from "@/lib/assets/
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db";
 import { getEnv, resetEnvCache } from "@/lib/env";
+import { setFalSubscriberForTests } from "@/lib/ai/providers/fal-client";
 import { createUpscaleJob } from "@/lib/jobs/service";
 import { processJob } from "@/lib/jobs/processor";
 import { createProject } from "@/lib/projects/service";
@@ -69,6 +70,7 @@ describe("upscale jobs", () => {
   const userIds: string[] = [];
 
   afterEach(() => {
+    setFalSubscriberForTests(null);
     setStorageForTests(null);
     resetMemoryStorage();
     resetRateLimits();
@@ -448,7 +450,9 @@ describe("upscale jobs", () => {
 
     vi.stubEnv("FAL_KEY", "fal_sk_test_not_real");
     resetEnvCache();
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("slow down", { status: 429 })));
+    setFalSubscriberForTests(async () => {
+      throw Object.assign(new Error("slow"), { status: 429 });
+    });
     await expect(processJob(job.id)).rejects.toMatchObject({ code: "PROVIDER_RATE_LIMITED" });
     const retried = await prisma.aIJob.findUniqueOrThrow({ where: { id: job.id } });
     expect(retried.status).toBe("queued");
@@ -475,15 +479,9 @@ describe("upscale jobs", () => {
       where: { id: shrinkJob.id },
       data: { providerId: "fal", modelId: "fal-ai/flux-vision-upscaler" },
     });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        new Response(JSON.stringify({ image: { content: tiny.toString("base64") } }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-      ),
-    );
+    setFalSubscriberForTests(async () => ({
+      data: { image: { content: tiny.toString("base64") } },
+    }));
     const rejected = await processJob(shrinkJob.id);
     expect(rejected.status).toBe("failed");
     expect(rejected.errorCode).toBe("PROVIDER_REJECTED");

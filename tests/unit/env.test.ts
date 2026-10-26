@@ -5,6 +5,7 @@ import {
   isGoogleOAuthConfigured,
   isMockAiAllowed,
   isS3Configured,
+  isStabilityConfigured,
   loadEnv,
 } from "@/lib/env";
 
@@ -64,6 +65,16 @@ describe("environment parsing", () => {
       GOOGLE_AI_API_KEY: "",
     });
     expect(isGoogleAiConfigured(env)).toBe(false);
+  });
+
+  it("treats blank Stability keys as unconfigured", () => {
+    const env = loadEnv({
+      ...required,
+      STABILITY_API_KEY: "",
+    });
+    expect(isStabilityConfigured(env)).toBe(false);
+    expect(env.STABILITY_BASE_URL).toBe("https://api.stability.ai");
+    expect(env.STABILITY_TIMEOUT_MS).toBe(120_000);
   });
 
   it("accepts FAL_API_KEY as an alias for FAL_KEY", () => {

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
 import { getBackgroundRemovalAdapter, runRemoveBackground } from "@/lib/ai/factory";
 import { falRemoveBackground, isAllowedFalResultUrl } from "@/lib/ai/providers/fal";
+import { setFalSubscriberForTests } from "@/lib/ai/providers/fal-client";
 import { mockRemoveBackground } from "@/lib/ai/providers/mock";
 import { resetEnvCache } from "@/lib/env";
 
@@ -24,6 +25,7 @@ function liveFalEnv() {
 
 describe("background removal adapter", () => {
   afterEach(() => {
+    setFalSubscriberForTests(null);
     resetEnvCache();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
@@ -63,12 +65,16 @@ describe("background removal adapter", () => {
   it("maps Fal 429 and 5xx without a live call", async () => {
     liveFalEnv();
     const source = await opaquePng();
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("slow down", { status: 429 })));
+    setFalSubscriberForTests(async () => {
+      throw Object.assign(new Error("slow"), { status: 429 });
+    });
     await expect(falRemoveBackground({ image: source, mimeType: "image/png" }, AbortSignal.timeout(1000))).rejects.toMatchObject(
       { code: "PROVIDER_RATE_LIMITED" },
     );
 
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("down", { status: 503 })));
+    setFalSubscriberForTests(async () => {
+      throw Object.assign(new Error("down"), { status: 503 });
+    });
     await expect(falRemoveBackground({ image: source, mimeType: "image/png" }, AbortSignal.timeout(1000))).rejects.toMatchObject(
       { code: "PROVIDER_UNAVAILABLE" },
     );
@@ -77,16 +83,13 @@ describe("background removal adapter", () => {
   it("maps an aborted Fal fetch to TIMEOUT without a live call", async () => {
     liveFalEnv();
     const source = await opaquePng();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((_url: string, init?: RequestInit) => {
-        return new Promise((_resolve, reject) => {
-          init?.signal?.addEventListener("abort", () => {
-            reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
-          });
+    setFalSubscriberForTests(async (_model, _input, signal) => {
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () => {
+          reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
         });
-      }),
-    );
+      });
+    });
     await expect(falRemoveBackground({ image: source, mimeType: "image/png" }, AbortSignal.timeout(1))).rejects.toMatchObject({
       code: "TIMEOUT",
     });
@@ -101,19 +104,14 @@ describe("background removal adapter", () => {
   it("does not fetch a rejected Fal result host", async () => {
     liveFalEnv();
     const source = await opaquePng();
-    const fetchSpy = vi.fn(async (url: string) => {
-      if (String(url).includes("fal.run")) {
-        return new Response(JSON.stringify({ image: { url: "https://evil.example/x.png" } }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      return new Response("nope", { status: 200 });
-    });
+    setFalSubscriberForTests(async () => ({
+      data: { image: { url: "https://evil.example/x.png" } },
+    }));
+    const fetchSpy = vi.fn(async () => new Response("nope", { status: 200 }));
     vi.stubGlobal("fetch", fetchSpy);
     await expect(falRemoveBackground({ image: source, mimeType: "image/png" }, AbortSignal.timeout(1000))).rejects.toMatchObject(
       { code: "PROVIDER_REJECTED" },
     );
-    expect(fetchSpy.mock.calls.some((call) => String(call[0]).includes("evil.example"))).toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

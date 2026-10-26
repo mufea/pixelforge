@@ -7,6 +7,7 @@ import {
   isGoogleAiConfigured,
   isMockAiAllowed,
   isOpenAIConfigured,
+  isStabilityConfigured,
   type AppEnv,
 } from "@/lib/env";
 import type { ProviderId } from "@/lib/ai/types";
@@ -19,6 +20,7 @@ export type ProviderRuntimeConfig = {
   openai: { configured: boolean; baseUrl: string; timeoutMs: number };
   fal: { configured: boolean; timeoutMs: number };
   google: { configured: boolean; baseUrl: string; timeoutMs: number };
+  stability: { configured: boolean; baseUrl: string; timeoutMs: number };
 };
 
 export type PublicProviderStatus = {
@@ -46,6 +48,11 @@ export function getProviderRuntimeConfig(env: AppEnv = getEnv()): ProviderRuntim
       baseUrl: env.GOOGLE_AI_BASE_URL,
       timeoutMs: env.GOOGLE_AI_TIMEOUT_MS,
     },
+    stability: {
+      configured: isStabilityConfigured(env),
+      baseUrl: env.STABILITY_BASE_URL,
+      timeoutMs: env.STABILITY_TIMEOUT_MS,
+    },
   };
 }
 
@@ -59,6 +66,8 @@ export function isProviderConfigured(providerId: ProviderId, env: AppEnv = getEn
       return isFalConfigured(env);
     case "google":
       return isGoogleAiConfigured(env);
+    case "stability":
+      return isStabilityConfigured(env);
   }
 }
 
@@ -71,6 +80,8 @@ export function getProviderTimeoutMs(providerId: ProviderId, env: AppEnv = getEn
       return config.fal.timeoutMs;
     case "google":
       return config.google.timeoutMs;
+    case "stability":
+      return config.stability.timeoutMs;
     case "mock":
       return config.defaultTimeoutMs;
   }
@@ -82,6 +93,7 @@ export function publicProviderStatuses(env: AppEnv = getEnv()): PublicProviderSt
     { id: "openai", configured: isProviderConfigured("openai", env) },
     { id: "fal", configured: isProviderConfigured("fal", env) },
     { id: "google", configured: isProviderConfigured("google", env) },
+    { id: "stability", configured: isProviderConfigured("stability", env) },
   ];
 }
 
@@ -111,5 +123,16 @@ export function getGoogleAiCredentials(env: AppEnv = getEnv()) {
     apiKey: env.GOOGLE_AI_API_KEY as string,
     baseUrl: env.GOOGLE_AI_BASE_URL,
     timeoutMs: env.GOOGLE_AI_TIMEOUT_MS,
+  };
+}
+
+export function getStabilityCredentials(env: AppEnv = getEnv()) {
+  if (!isStabilityConfigured(env)) {
+    throw new DomainError("PROVIDER_NOT_CONFIGURED", "Stability AI is not configured", 503);
+  }
+  return {
+    apiKey: env.STABILITY_API_KEY as string,
+    baseUrl: env.STABILITY_BASE_URL,
+    timeoutMs: env.STABILITY_TIMEOUT_MS,
   };
 }
