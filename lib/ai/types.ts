@@ -7,6 +7,7 @@ export const IMAGE_OPERATIONS = [
   "REMOVE_BACKGROUND",
   "UPSCALE",
   "REMOVE_OBJECT",
+  "IMAGE_TO_IMAGE",
 ] as const;
 export type ImageOperation = (typeof IMAGE_OPERATIONS)[number];
 
@@ -80,6 +81,14 @@ export type RemoveObjectInput = {
   mimeType?: OutputImageMime;
 };
 
+export type ImageToImageInput = {
+  prompt: string;
+  image: Buffer;
+  mimeType?: OutputImageMime;
+  /** Fal flux/dev/image-to-image: 0.01–1, documented default 0.95. */
+  strength?: number;
+};
+
 export type ImageGenerationAdapter = {
   readonly providerId: ProviderId;
   readonly modelId: string;
@@ -108,6 +117,12 @@ export type ObjectRemovalAdapter = {
   readonly providerId: ProviderId;
   readonly modelId: string;
   removeObject(input: RemoveObjectInput, signal: AbortSignal): Promise<ProviderResult>;
+};
+
+export type ImageToImageAdapter = {
+  readonly providerId: ProviderId;
+  readonly modelId: string;
+  imageToImage(input: ImageToImageInput, signal: AbortSignal): Promise<ProviderResult>;
 };
 
 export type ProviderSelection = {

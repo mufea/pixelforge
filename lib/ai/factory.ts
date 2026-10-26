@@ -7,9 +7,23 @@ import {
   isProviderConfigured,
 } from "@/lib/ai/config";
 import { normalizeProviderError } from "@/lib/ai/errors";
-import { falGenerate, falRemoveBackground, falRemoveObject, falUnimplemented, falUpscale } from "@/lib/ai/providers/fal";
+import {
+  falEdit,
+  falGenerate,
+  falImageToImage,
+  falRemoveBackground,
+  falRemoveObject,
+  falUpscale,
+} from "@/lib/ai/providers/fal";
 import { googleUnimplemented } from "@/lib/ai/providers/google";
-import { mockEdit, mockGenerate, mockRemoveBackground, mockRemoveObject, mockUpscale } from "@/lib/ai/providers/mock";
+import {
+  mockEdit,
+  mockGenerate,
+  mockImageToImage,
+  mockRemoveBackground,
+  mockRemoveObject,
+  mockUpscale,
+} from "@/lib/ai/providers/mock";
 import { openaiEdit } from "@/lib/ai/providers/openai-edit";
 import { openaiGenerate } from "@/lib/ai/providers/openai-generate";
 import {
@@ -28,6 +42,8 @@ import {
   type ImageEditAdapter,
   type ImageGenerationAdapter,
   type ImageOperation,
+  type ImageToImageAdapter,
+  type ImageToImageInput,
   type ObjectRemovalAdapter,
   type ProviderId,
   type ProviderResult,
@@ -90,10 +106,11 @@ function defaultModelId(providerId: ProviderId) {
 
 const AUTO_PROVIDER_ORDER: Record<ImageOperation, ProviderId[]> = {
   GENERATE: ["openai", "fal", "stability"],
-  EDIT: ["openai", "stability"],
+  EDIT: ["openai", "stability", "fal"],
   REMOVE_BACKGROUND: ["fal", "stability"],
   UPSCALE: ["fal", "stability"],
   REMOVE_OBJECT: ["fal", "stability"],
+  IMAGE_TO_IMAGE: ["fal"],
 };
 
 function resolveAutomatic(operation: ImageOperation): ResolvedProvider {
@@ -127,6 +144,9 @@ function resolveAutomatic(operation: ImageOperation): ResolvedProvider {
   }
   if (operation === "REMOVE_OBJECT") {
     throw new DomainError("PROVIDER_NOT_CONFIGURED", "No object removal provider is configured", 503);
+  }
+  if (operation === "IMAGE_TO_IMAGE") {
+    throw new DomainError("PROVIDER_NOT_CONFIGURED", "No image-to-image provider is configured", 503);
   }
   throw new DomainError("MODEL_CAPABILITY_UNSUPPORTED", `Operation ${operation} is not implemented`, 400);
 }
@@ -311,7 +331,7 @@ export function getEditAdapter(selection: ProviderSelection = {}): ImageEditAdap
     return { providerId: "stability", modelId: resolved.modelId, edit: stabilityEdit };
   }
   if (resolved.providerId === "fal") {
-    return falUnimplemented("EDIT");
+    return { providerId: "fal", modelId: resolved.modelId, edit: falEdit };
   }
   throw new DomainError(
     "MODEL_CAPABILITY_UNSUPPORTED",
@@ -354,7 +374,59 @@ export function editUnavailableReason(): string | null {
   if (!config.jobsEnabled) {
     return "AI jobs are temporarily disabled.";
   }
-  return "No image editing provider is configured. Set OPENAI_API_KEY or STABILITY_API_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests.";
+  return "No image editing provider is configured. Set OPENAI_API_KEY, STABILITY_API_KEY, or FAL_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests.";
+}
+
+export function getImageToImageAdapter(selection: ProviderSelection = {}): ImageToImageAdapter {
+  const resolved = resolveProvider("IMAGE_TO_IMAGE", selection);
+  if (resolved.providerId === "mock") {
+    return { providerId: "mock", modelId: resolved.modelId, imageToImage: mockImageToImage };
+  }
+  if (resolved.providerId === "fal") {
+    return { providerId: "fal", modelId: resolved.modelId, imageToImage: falImageToImage };
+  }
+  throw new DomainError(
+    "MODEL_CAPABILITY_UNSUPPORTED",
+    `Provider ${resolved.providerId} does not implement IMAGE_TO_IMAGE`,
+    400,
+  );
+}
+
+export async function runImageToImage(
+  input: ImageToImageInput,
+  signal: AbortSignal,
+  selection: ProviderSelection = {},
+): Promise<ProviderResult> {
+  try {
+    const adapter = getImageToImageAdapter(selection);
+    return await adapter.imageToImage(input, signal);
+  } catch (error) {
+    throw normalizeProviderError(error);
+  }
+}
+
+export function isImageToImageAvailable(): boolean {
+  const config = getProviderRuntimeConfig();
+  if (!config.jobsEnabled) {
+    return false;
+  }
+  try {
+    resolveProvider("IMAGE_TO_IMAGE");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function imageToImageUnavailableReason(): string | null {
+  if (isImageToImageAvailable()) {
+    return null;
+  }
+  const config = getProviderRuntimeConfig();
+  if (!config.jobsEnabled) {
+    return "AI jobs are temporarily disabled.";
+  }
+  return "No image-to-image provider is configured. Set FAL_KEY on the server, or use AI_PROVIDER_MODE=mock in development tests.";
 }
 
 export function getObjectRemovalAdapter(selection: ProviderSelection = {}): ObjectRemovalAdapter {

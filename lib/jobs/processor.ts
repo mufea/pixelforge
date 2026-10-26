@@ -5,6 +5,7 @@ import {
   resolveProvider,
   runEdit,
   runGenerate,
+  runImageToImage,
   runRemoveBackground,
   runRemoveObject,
   runUpscale,
@@ -84,7 +85,8 @@ export async function processJob(jobId: string) {
       job.operation !== "REMOVE_BACKGROUND" &&
       job.operation !== "UPSCALE" &&
       job.operation !== "EDIT" &&
-      job.operation !== "REMOVE_OBJECT"
+      job.operation !== "REMOVE_OBJECT" &&
+      job.operation !== "IMAGE_TO_IMAGE"
     ) {
       throw new DomainError(
         isImageOperation(job.operation) ? "MODEL_CAPABILITY_UNSUPPORTED" : "VALIDATION",
@@ -107,6 +109,9 @@ export async function processJob(jobId: string) {
     }
     if (job.operation === "REMOVE_OBJECT") {
       return await executeRemoveObject(job);
+    }
+    if (job.operation === "IMAGE_TO_IMAGE") {
+      return await executeImageToImage(job);
     }
     return await executeGenerate(job);
   } catch (error) {
@@ -419,6 +424,35 @@ async function executeRemoveObject(job: {
   );
 }
 
+async function executeImageToImage(job: {
+  id: string;
+  userId: string;
+  projectId: string | null;
+  reservationId: string | null;
+  providerId: string;
+  modelId: string;
+  inputJson: unknown;
+  attemptCount: number;
+}) {
+  const env = getEnv();
+  const prompt = readPrompt(job.inputJson);
+  const loaded = await loadOwnedImage(job.userId, job.projectId, readAssetId(job.inputJson));
+  const strength = readOptionalStrength(job.inputJson);
+  const provider = resolveProvider("IMAGE_TO_IMAGE", { providerId: job.providerId, modelId: job.modelId });
+  const result = await runImageToImage(
+    { prompt, image: loaded.bytes, mimeType: loaded.mime, strength },
+    AbortSignal.timeout(getProviderTimeoutMs(provider.providerId)),
+    { providerId: provider.providerId, modelId: provider.modelId },
+  );
+  return persistStudioDerivative(
+    job,
+    loaded.source,
+    result,
+    env,
+    imageToImageFilename(loaded.source.originalFilename),
+  );
+}
+
 async function persistStudioDerivative(
   job: { id: string; userId: string; projectId: string | null; reservationId: string | null; attemptCount: number },
   source: { id: string; originalFilename: string },
@@ -561,6 +595,10 @@ function removedObjectFilename(originalFilename: string) {
   return originalFilename.replace(/\.(jpe?g|png|webp)$/i, "") + "-removed.png";
 }
 
+function imageToImageFilename(originalFilename: string) {
+  return originalFilename.replace(/\.(jpe?g|png|webp)$/i, "") + "-i2i.png";
+}
+
 function readScaleFactor(inputJson: unknown) {
   if (typeof inputJson !== "object" || inputJson === null || !("scaleFactor" in inputJson)) {
     throw new DomainError("UNSUPPORTED_UPSCALE_FACTOR", "Upscale factor must be 2, 3, or 4");
@@ -603,6 +641,20 @@ function readAssetId(inputJson: unknown) {
     throw new DomainError("VALIDATION", "Job is missing an asset");
   }
   return assetId;
+}
+
+function readOptionalStrength(inputJson: unknown) {
+  if (typeof inputJson !== "object" || inputJson === null || !("strength" in inputJson)) {
+    return undefined;
+  }
+  const strength = (inputJson as { strength: unknown }).strength;
+  if (strength === undefined || strength === null) {
+    return undefined;
+  }
+  if (typeof strength !== "number" || !Number.isFinite(strength) || strength < 0.01 || strength > 1) {
+    throw new DomainError("VALIDATION", "strength must be between 0.01 and 1");
+  }
+  return strength;
 }
 
 function readPrompt(inputJson: unknown) {

@@ -41,8 +41,17 @@ export const createRemoveObjectJobSchema = z.object({
   maskAssetId: z.string().uuid(),
 });
 
+export const createImageToImageJobSchema = z.object({
+  operation: z.literal("IMAGE_TO_IMAGE"),
+  projectId: z.string().uuid(),
+  assetId: z.string().uuid(),
+  prompt: z.string().trim().min(3, "Prompt must be at least 3 characters").max(2000),
+  strength: z.number().gte(0.01).lte(1).optional(),
+});
+
 export type CreateGenerateJobInput = z.infer<typeof createGenerateJobSchema>;
 export type CreateRemoveBackgroundJobInput = z.infer<typeof createRemoveBackgroundJobSchema>;
 export type CreateUpscaleJobInput = z.infer<typeof createUpscaleJobSchema>;
 export type CreateEditJobInput = z.infer<typeof createEditJobSchema>;
 export type CreateRemoveObjectJobInput = z.infer<typeof createRemoveObjectJobSchema>;
+export type CreateImageToImageJobInput = z.infer<typeof createImageToImageJobSchema>;

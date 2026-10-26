@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { resolveProvider } from "@/lib/ai/generate";
+import { resolveProvider } from "@/lib/ai/factory";
 import { isAllowedImageMime } from "@/lib/assets/mime";
 import { assertWithinQuota } from "@/lib/assets/quota";
 import { getOwnedAsset } from "@/lib/assets/service";
@@ -16,6 +16,7 @@ import { assertResizeWithinLimits } from "@/lib/images/transform";
 import {
   createEditJobSchema,
   createGenerateJobSchema,
+  createImageToImageJobSchema,
   createRemoveBackgroundJobSchema,
   createRemoveObjectJobSchema,
   createUpscaleJobSchema,
@@ -216,10 +217,47 @@ export async function createRemoveObjectJob(userId: string, input: unknown) {
   });
 }
 
+export async function createImageToImageJob(userId: string, input: unknown) {
+  const env = getEnv();
+  if (!env.AI_JOBS_ENABLED) {
+    throw new DomainError("AI_JOBS_DISABLED", "AI jobs are temporarily disabled", 503);
+  }
+
+  const parsed = createImageToImageJobSchema.safeParse(input);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    if (issue?.path[0] === "strength") {
+      throw new DomainError("VALIDATION", "strength must be between 0.01 and 1");
+    }
+    throw new DomainError("VALIDATION", issue?.message ?? "Invalid job");
+  }
+
+  await getOwnedProject(userId, parsed.data.projectId);
+  const source = await requireOwnedSourceImage(userId, parsed.data.projectId, parsed.data.assetId);
+  await assertWithinQuota(userId, source.byteSize);
+  const provider = resolveProvider("IMAGE_TO_IMAGE");
+
+  return createQueuedBillableJob({
+    userId,
+    projectId: parsed.data.projectId,
+    operation: "IMAGE_TO_IMAGE",
+    providerId: provider.providerId,
+    modelId: provider.modelId,
+    inputJson: {
+      projectId: parsed.data.projectId,
+      assetId: source.id,
+      inputAssetIds: [source.id],
+      prompt: parsed.data.prompt,
+      ...(parsed.data.strength !== undefined ? { strength: parsed.data.strength } : {}),
+    },
+    timeoutMs: env.JOB_DEFAULT_TIMEOUT_MS,
+  });
+}
+
 export async function createQueuedBillableJob(input: {
   userId: string;
   projectId: string | null;
-  operation: "GENERATE" | "EDIT" | "REMOVE_BACKGROUND" | "REMOVE_OBJECT" | "UPSCALE";
+  operation: "GENERATE" | "EDIT" | "REMOVE_BACKGROUND" | "REMOVE_OBJECT" | "UPSCALE" | "IMAGE_TO_IMAGE";
   providerId: string;
   modelId: string;
   inputJson: Record<string, unknown>;
@@ -327,6 +365,9 @@ export async function createStudioJob(userId: string, input: unknown) {
     }
     if (input.operation === "REMOVE_OBJECT") {
       return createRemoveObjectJob(userId, input);
+    }
+    if (input.operation === "IMAGE_TO_IMAGE") {
+      return createImageToImageJob(userId, input);
     }
   }
   return createGenerateJob(userId, input);

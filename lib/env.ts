@@ -55,6 +55,8 @@ const envSchema = z.object({
   MAX_IMAGE_PIXELS: z.coerce.number().int().positive().default(25_000_000),
   MAX_IMAGE_EDGE_PX: z.coerce.number().int().positive().default(8192),
   STORAGE_QUOTA_BYTES: z.coerce.number().int().positive().default(1_073_741_824),
+  ZIP_EXPORT_MAX_FILES: z.coerce.number().int().positive().default(50),
+  ZIP_EXPORT_MAX_BYTES: z.coerce.number().int().positive().default(104_857_600),
   STORAGE_LOCAL_DIR: z.string().default(".storage"),
   UPLOAD_INTENT_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().nonnegative().default(30),
   QUEUE_PREFIX: z.string().default("pixelforge"),

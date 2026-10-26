@@ -5,6 +5,7 @@ describe("credit pricing", () => {
   it("returns the provisional costs for every billable operation and upscale factor", () => {
     expect(getCreditCost({ operation: "GENERATE" })).toBe(10);
     expect(getCreditCost({ operation: "EDIT" })).toBe(10);
+    expect(getCreditCost({ operation: "IMAGE_TO_IMAGE" })).toBe(10);
     expect(getCreditCost({ operation: "REMOVE_BACKGROUND" })).toBe(6);
     expect(getCreditCost({ operation: "REMOVE_OBJECT" })).toBe(6);
     expect(getCreditCost({ operation: "UPSCALE", scaleFactor: 2 })).toBe(8);

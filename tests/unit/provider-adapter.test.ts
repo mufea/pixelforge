@@ -64,6 +64,10 @@ describe("provider adapter architecture", () => {
         providerId: "mock",
         modelId: "mock-object-remove",
       });
+      expect(resolveProvider("IMAGE_TO_IMAGE")).toEqual({
+        providerId: "mock",
+        modelId: "mock-image-to-image",
+      });
     });
 
     it("selects OpenAI when requested explicitly and configured", () => {
@@ -170,6 +174,32 @@ describe("provider adapter architecture", () => {
       expect(resolveProvider("EDIT")).toEqual({
         providerId: "openai",
         modelId: "gpt-image-2.5-flare",
+      });
+    });
+
+    it("selects Fal kontext/dev for edit when only Fal is configured", () => {
+      liveEnv({ FAL_KEY: "fal_sk_test_not_real" });
+      expect(resolveProvider("EDIT")).toEqual({
+        providerId: "fal",
+        modelId: "fal-ai/flux-kontext/dev",
+      });
+    });
+
+    it("fails closed in live mode when no image-to-image provider is configured", () => {
+      liveEnv();
+      try {
+        resolveProvider("IMAGE_TO_IMAGE");
+        throw new Error("expected failure");
+      } catch (error) {
+        expect(error).toMatchObject({ code: "PROVIDER_NOT_CONFIGURED", status: 503 });
+      }
+    });
+
+    it("selects Fal flux/dev image-to-image when Fal is configured", () => {
+      liveEnv({ FAL_KEY: "fal_sk_test_not_real" });
+      expect(resolveProvider("IMAGE_TO_IMAGE")).toEqual({
+        providerId: "fal",
+        modelId: "fal-ai/flux/dev/image-to-image",
       });
     });
 

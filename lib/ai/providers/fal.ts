@@ -4,8 +4,10 @@ import sharp from "sharp";
 import { getFalCredentials } from "@/lib/ai/config";
 import { subscribeFal } from "@/lib/ai/providers/fal-client";
 import type {
+  EditInput,
   GenerateInput,
   ImageOperation,
+  ImageToImageInput,
   ProviderResult,
   RemoveBackgroundInput,
   RemoveObjectInput,
@@ -19,6 +21,10 @@ export const FAL_BACKGROUND_MODEL = "fal-ai/bria/background/remove";
 export const FAL_UPSCALE_MODEL = "fal-ai/flux-vision-upscaler";
 export const FAL_OBJECT_REMOVAL_MODEL = "fal-ai/object-removal/mask";
 export const FAL_GENERATE_MODEL = "fal-ai/flux/schnell";
+/** Official Fal image-editing model: prompt + image_url. No mask parameter. */
+export const FAL_EDIT_MODEL = "fal-ai/flux-kontext/dev";
+/** Official Fal image-to-image model: prompt + image_url + optional strength 0.01–1. */
+export const FAL_IMAGE_TO_IMAGE_MODEL = "fal-ai/flux/dev/image-to-image";
 
 type FalImageField = { url?: string; content?: string; file_data?: string; width?: number; height?: number };
 
@@ -47,98 +53,112 @@ export function isAllowedFalResultUrl(value: string): boolean {
 }
 
 export async function falGenerate(input: GenerateInput, signal: AbortSignal): Promise<ProviderResult> {
-  getFalCredentials();
-  const started = Date.now();
-  const payload = await subscribeFal(FAL_GENERATE_MODEL, { prompt: input.prompt }, signal);
-  const bytes = await readFalImageBytes(firstFalImage(asFalPayload(payload.data)), signal);
-  const metadata = await inspectFalImage(bytes);
-  return {
-    images: [{ bytes, mimeType: metadata.mimeType, width: metadata.width, height: metadata.height }],
-    providerRequestId: payload.requestId,
-    latencyMs: Date.now() - started,
-    rawModel: FAL_GENERATE_MODEL,
+  return runFalImageJob(FAL_GENERATE_MODEL, { prompt: input.prompt }, signal);
+}
+
+export async function falEdit(input: EditInput, signal: AbortSignal): Promise<ProviderResult> {
+  const prompt = input.prompt.trim();
+  if (prompt.length < 3) {
+    throw new DomainError("VALIDATION", "Prompt must be at least 3 characters");
+  }
+  if (input.mask) {
+    throw new DomainError(
+      "MODEL_CAPABILITY_UNSUPPORTED",
+      "Fal flux-kontext/dev does not accept a mask. Use OpenAI or Stability inpaint for masked edits.",
+      400,
+    );
+  }
+  const mime = requireFalSourceMime(input.image, input.mimeType);
+  return runFalImageJob(
+    FAL_EDIT_MODEL,
+    { prompt, image_url: toDataUri(input.image, mime), output_format: "png" },
+    signal,
+  );
+}
+
+export async function falImageToImage(input: ImageToImageInput, signal: AbortSignal): Promise<ProviderResult> {
+  const prompt = input.prompt.trim();
+  if (prompt.length < 3) {
+    throw new DomainError("VALIDATION", "Prompt must be at least 3 characters");
+  }
+  const mime = requireFalSourceMime(input.image, input.mimeType);
+  const payload: Record<string, unknown> = {
+    prompt,
+    image_url: toDataUri(input.image, mime),
+    output_format: "png",
   };
+  if (input.strength !== undefined) {
+    if (!Number.isFinite(input.strength) || input.strength < 0.01 || input.strength > 1) {
+      throw new DomainError("VALIDATION", "strength must be between 0.01 and 1");
+    }
+    payload.strength = input.strength;
+  }
+  return runFalImageJob(FAL_IMAGE_TO_IMAGE_MODEL, payload, signal);
 }
 
 export async function falRemoveBackground(
   input: RemoveBackgroundInput,
   signal: AbortSignal,
 ): Promise<ProviderResult> {
-  const mime = input.mimeType ?? detectImageMime(input.image);
-  if (mime !== "image/jpeg" && mime !== "image/png" && mime !== "image/webp") {
-    throw new DomainError("VALIDATION_INVALID_SIGNATURE", "The source file is not a JPEG, PNG, or WebP image");
-  }
-
-  getFalCredentials();
-  const started = Date.now();
-  const dataUri = `data:${mime};base64,${input.image.toString("base64")}`;
-  const payload = await subscribeFal(FAL_BACKGROUND_MODEL, { image_url: dataUri }, signal);
-  const bytes = await readFalImageBytes(firstFalImage(asFalPayload(payload.data)), signal);
-  const metadata = await inspectFalImage(bytes);
-
-  return {
-    images: [{ bytes, mimeType: metadata.mimeType, width: metadata.width, height: metadata.height }],
-    providerRequestId: payload.requestId,
-    latencyMs: Date.now() - started,
-    rawModel: FAL_BACKGROUND_MODEL,
-  };
+  const mime = requireFalSourceMime(input.image, input.mimeType);
+  return runFalImageJob(FAL_BACKGROUND_MODEL, { image_url: toDataUri(input.image, mime) }, signal);
 }
 
 export async function falUpscale(input: UpscaleInput, signal: AbortSignal): Promise<ProviderResult> {
   if (input.scaleFactor !== 2 && input.scaleFactor !== 3 && input.scaleFactor !== 4) {
     throw new DomainError("UNSUPPORTED_UPSCALE_FACTOR", "Upscale factor must be 2, 3, or 4");
   }
-  const mime = input.mimeType ?? detectImageMime(input.image);
-  if (mime !== "image/jpeg" && mime !== "image/png" && mime !== "image/webp") {
-    throw new DomainError("VALIDATION_INVALID_SIGNATURE", "The source file is not a JPEG, PNG, or WebP image");
-  }
-
-  getFalCredentials();
-  const started = Date.now();
-  const dataUri = `data:${mime};base64,${input.image.toString("base64")}`;
-  const payload = await subscribeFal(
+  const mime = requireFalSourceMime(input.image, input.mimeType);
+  return runFalImageJob(
     FAL_UPSCALE_MODEL,
-    { image_url: dataUri, upscale_factor: input.scaleFactor },
+    { image_url: toDataUri(input.image, mime), upscale_factor: input.scaleFactor },
     signal,
   );
-  const bytes = await readFalImageBytes(firstFalImage(asFalPayload(payload.data)), signal);
-  const metadata = await inspectFalImage(bytes);
-
-  return {
-    images: [{ bytes, mimeType: metadata.mimeType, width: metadata.width, height: metadata.height }],
-    providerRequestId: payload.requestId,
-    latencyMs: Date.now() - started,
-    rawModel: FAL_UPSCALE_MODEL,
-  };
 }
 
 export async function falRemoveObject(input: RemoveObjectInput, signal: AbortSignal): Promise<ProviderResult> {
-  const mime = input.mimeType ?? detectImageMime(input.image);
-  if (mime !== "image/jpeg" && mime !== "image/png" && mime !== "image/webp") {
-    throw new DomainError("VALIDATION_INVALID_SIGNATURE", "The source file is not a JPEG, PNG, or WebP image");
-  }
+  const mime = requireFalSourceMime(input.image, input.mimeType);
   if (detectImageMime(input.mask) !== "image/png") {
     throw new DomainError("VALIDATION_INVALID_MIME", "Object removal masks must be PNG images");
   }
-
-  getFalCredentials();
-  const started = Date.now();
-  const imageUri = `data:${mime};base64,${input.image.toString("base64")}`;
-  const maskUri = `data:image/png;base64,${input.mask.toString("base64")}`;
-  const payload = await subscribeFal(
+  return runFalImageJob(
     FAL_OBJECT_REMOVAL_MODEL,
-    { image_url: imageUri, mask_url: maskUri },
+    {
+      image_url: toDataUri(input.image, mime),
+      mask_url: toDataUri(input.mask, "image/png"),
+    },
     signal,
   );
+}
+
+async function runFalImageJob(
+  modelId: string,
+  input: Record<string, unknown>,
+  signal: AbortSignal,
+): Promise<ProviderResult> {
+  getFalCredentials();
+  const started = Date.now();
+  const payload = await subscribeFal(modelId, input, signal);
   const bytes = await readFalImageBytes(firstFalImage(asFalPayload(payload.data)), signal);
   const metadata = await inspectFalImage(bytes);
-
   return {
     images: [{ bytes, mimeType: metadata.mimeType, width: metadata.width, height: metadata.height }],
     providerRequestId: payload.requestId,
     latencyMs: Date.now() - started,
-    rawModel: FAL_OBJECT_REMOVAL_MODEL,
+    rawModel: modelId,
   };
+}
+
+function requireFalSourceMime(image: Buffer, mimeType?: string) {
+  const mime = mimeType ?? detectImageMime(image);
+  if (mime !== "image/jpeg" && mime !== "image/png" && mime !== "image/webp") {
+    throw new DomainError("VALIDATION_INVALID_SIGNATURE", "The source file is not a JPEG, PNG, or WebP image");
+  }
+  return mime;
+}
+
+function toDataUri(bytes: Buffer, mime: string) {
+  return `data:${mime};base64,${bytes.toString("base64")}`;
 }
 
 function asFalPayload(data: unknown): { image?: FalImageField; images?: FalImageField[] } {

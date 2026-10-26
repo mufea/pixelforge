@@ -3,6 +3,7 @@ import { normalizeProviderError } from "@/lib/ai/errors";
 import type {
   EditInput,
   GenerateInput,
+  ImageToImageInput,
   ProviderResult,
   RemoveBackgroundInput,
   RemoveObjectInput,
@@ -190,5 +191,40 @@ export async function mockRemoveObject(input: RemoveObjectInput, signal?: AbortS
     providerRequestId: `mock-object-remove-${info.width}x${info.height}`,
     latencyMs: Date.now() - started,
     rawModel: "mock-object-remove",
+  };
+}
+
+export async function mockImageToImage(input: ImageToImageInput, signal?: AbortSignal): Promise<ProviderResult> {
+  throwIfAborted(signal);
+  const prompt = input.prompt.trim();
+  if (prompt.length < 3) {
+    throw new DomainError("VALIDATION", "Prompt must be at least 3 characters");
+  }
+  if (input.strength !== undefined && (!Number.isFinite(input.strength) || input.strength < 0.01 || input.strength > 1)) {
+    throw new DomainError("VALIDATION", "strength must be between 0.01 and 1");
+  }
+
+  const started = Date.now();
+  const metadata = await sharp(input.image, { failOn: "error" }).metadata();
+  const width = metadata.width ?? 0;
+  const height = metadata.height ?? 0;
+  if (width < 1 || height < 1) {
+    throw new DomainError("VALIDATION_INVALID_SIGNATURE", "The source file is not a JPEG, PNG, or WebP image");
+  }
+
+  const strength = input.strength ?? 0.95;
+  const overlay = Math.round(40 + strength * 80);
+  const bytes = await sharp(input.image, { failOn: "error" })
+    .ensureAlpha()
+    .modulate({ brightness: 1 + strength * 0.08 })
+    .png()
+    .toBuffer();
+  throwIfAborted(signal);
+
+  return {
+    images: [{ bytes, mimeType: "image/png", width, height }],
+    providerRequestId: `mock-i2i-${overlay}`,
+    latencyMs: Date.now() - started,
+    rawModel: "mock-image-to-image",
   };
 }

@@ -8,6 +8,7 @@ export const BILLABLE_OPERATIONS = [
   "REMOVE_BACKGROUND",
   "REMOVE_OBJECT",
   "UPSCALE",
+  "IMAGE_TO_IMAGE",
 ] as const;
 
 export type BillableOperation = (typeof BILLABLE_OPERATIONS)[number];
@@ -24,6 +25,7 @@ const FLAT_CREDIT_COSTS: Record<Exclude<BillableOperation, "UPSCALE">, number> =
   EDIT: 10,
   REMOVE_BACKGROUND: 6,
   REMOVE_OBJECT: 6,
+  IMAGE_TO_IMAGE: 10,
 };
 
 const UPSCALE_CREDIT_COSTS: Record<UpscaleScaleFactor, number> = {
@@ -66,7 +68,13 @@ export function getCreditCost(input: CreditCostInput): number {
     }
     return cost;
   }
-  if (operation === "GENERATE" || operation === "EDIT" || operation === "REMOVE_BACKGROUND" || operation === "REMOVE_OBJECT") {
+  if (
+    operation === "GENERATE" ||
+    operation === "EDIT" ||
+    operation === "REMOVE_BACKGROUND" ||
+    operation === "REMOVE_OBJECT" ||
+    operation === "IMAGE_TO_IMAGE"
+  ) {
     const cost = FLAT_CREDIT_COSTS[operation];
     if (!Number.isInteger(cost) || cost <= 0) {
       throw new DomainError(
@@ -91,6 +99,7 @@ function isImageOperationName(operation: string): operation is ImageOperation {
     operation === "EDIT" ||
     operation === "REMOVE_BACKGROUND" ||
     operation === "REMOVE_OBJECT" ||
-    operation === "UPSCALE"
+    operation === "UPSCALE" ||
+    operation === "IMAGE_TO_IMAGE"
   );
 }
