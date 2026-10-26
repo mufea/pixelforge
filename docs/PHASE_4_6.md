@@ -12,6 +12,7 @@ Costs live in `lib/billing/pricing.ts`. Route handlers and the worker do not har
 | --- | ---: |
 | GENERATE | 10 |
 | EDIT | 10 |
+| IMAGE_TO_IMAGE | 10 |
 | REMOVE_BACKGROUND | 6 |
 | REMOVE_OBJECT | 6 |
 | UPSCALE factor 2 | 8 |

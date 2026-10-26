@@ -66,7 +66,7 @@ Each adapter must:
 | Operation | OpenAI | Google Gemini | Fal AI | Stability AI | Sharp (local) |
 | --- | --- | --- | --- | --- | --- |
 | Text-to-image | `gpt-image-2.5-flare` | stub | `fal-ai/flux/schnell` (implemented). `fal-ai/flux-2-pro` remains a disabled stub | `POST /v2beta/stable-image/generate/ultra` | No |
-| Image-to-image / edit | Images edits + optional mask | stub | Fal EDIT is **not** implemented | `POST /v2beta/stable-image/edit/inpaint` | No |
+| Image-to-image / edit | Images edits + optional mask | stub | EDIT: `fal-ai/flux-kontext/dev` (prompt + image, **no mask**). IMAGE_TO_IMAGE: `fal-ai/flux/dev/image-to-image` (prompt + image + optional strength) | `POST /v2beta/stable-image/edit/inpaint` | No |
 | Inpaint / mask | Yes (image + mask) | Not assumed | `fal-ai/object-removal/mask` | Inpaint + erase | No |
 | Background removal | Not a dedicated API | Not a dedicated API | `fal-ai/bria/background/remove` | `POST /v2beta/stable-image/edit/remove-background` | No |
 | Upscale | Not a dedicated API | Not a dedicated API | `fal-ai/flux-vision-upscaler` factors 2\|3\|4 | Fast upscale is **4× only** | Geometric resize only, labeled as non-AI |

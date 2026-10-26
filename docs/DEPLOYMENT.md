@@ -70,6 +70,8 @@ pnpm prisma migrate deploy
 
 Do not use local disk (`.storage`) on Render. Do not claim this Blueprint is live until a human creates the services and a health check returns 200.
 
+A step-by-step go-live list (env split, migrate, health, remaining external config) is in [RENDER_CHECKLIST.md](./RENDER_CHECKLIST.md). Stripe/Midtrans remain a separate slice: [PAYMENTS_PLAN.md](./PAYMENTS_PLAN.md).
+
 ## Required managed services
 
 | Concern | Local | Production |
