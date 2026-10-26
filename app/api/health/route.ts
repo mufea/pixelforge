@@ -1,7 +1,5 @@
+import { livenessPayload } from "@/lib/health";
+
 export async function GET() {
-  return Response.json({
-    ok: true,
-    service: "pixelforge-web",
-    timestamp: new Date().toISOString(),
-  });
+  return Response.json(livenessPayload());
 }

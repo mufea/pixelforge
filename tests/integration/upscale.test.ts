@@ -411,8 +411,8 @@ describe("upscale jobs", () => {
       assetId: original.id,
       scaleFactor: 2,
     });
-    const processed = await processJob(job.id);
-    expect(processed.status).toBe("failed");
+    await expect(processJob(job.id)).rejects.toMatchObject({ code: "STORAGE_UNAVAILABLE" });
+    expect((await prisma.aIJob.findUniqueOrThrow({ where: { id: job.id } })).status).toBe("queued");
     expect(await prisma.asset.count({ where: { userId: owner.userId, kind: "DERIVATIVE" } })).toBe(0);
     expect(await getOwnedAsset(owner.userId, original.id)).toMatchObject({ id: original.id });
   });

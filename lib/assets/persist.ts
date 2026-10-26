@@ -23,7 +23,11 @@ export async function persistDerivedAsset(input: {
     throw new DomainError("INTERNAL", "Refusing to store a user filename in the object key", 500);
   }
 
-  await getStorage().putObject(storageKey, input.bytes, input.mimeType);
+  try {
+    await getStorage().putObject(storageKey, input.bytes, input.mimeType);
+  } catch (error) {
+    throw asStorageUnavailable(error);
+  }
   try {
     return await prisma.$transaction(async (tx) => {
       const created = await tx.asset.create({
@@ -77,4 +81,15 @@ export async function rollbackDerivedAsset(userId: string, asset: { id: string; 
     });
   });
   await getStorage().deleteObject(asset.storageKey);
+}
+
+function asStorageUnavailable(error: unknown) {
+  if (error instanceof DomainError) {
+    return error;
+  }
+  return new DomainError(
+    "STORAGE_UNAVAILABLE",
+    "Private object storage did not accept the file",
+    503,
+  );
 }

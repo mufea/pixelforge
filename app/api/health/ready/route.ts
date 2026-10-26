@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
+import { readinessPayload } from "@/lib/health";
 import { getStorage } from "@/lib/storage";
 
 export async function GET() {
@@ -8,25 +9,11 @@ export async function GET() {
     const storage = getStorage();
     const redis = await redisStatus();
     const ok = redis !== "down";
-    return Response.json(
-      {
-        ok,
-        postgres: "up",
-        redis,
-        storage: storage.driver,
-        timestamp: new Date().toISOString(),
-      },
-      { status: ok ? 200 : 503 },
-    );
+    return Response.json(readinessPayload({ ok, postgres: "up", redis, storage: storage.driver }), {
+      status: ok ? 200 : 503,
+    });
   } catch {
-    return Response.json(
-      {
-        ok: false,
-        postgres: "down",
-        timestamp: new Date().toISOString(),
-      },
-      { status: 503 },
-    );
+    return Response.json(readinessPayload({ ok: false, postgres: "down" }), { status: 503 });
   }
 }
 

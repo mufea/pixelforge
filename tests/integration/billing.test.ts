@@ -22,6 +22,7 @@ import { processJob } from "@/lib/jobs/processor";
 import { createGenerateJob, createUpscaleJob } from "@/lib/jobs/service";
 import { createProject } from "@/lib/projects/service";
 import { resetRateLimits } from "@/lib/rate-limit";
+import { setStorageForTests } from "@/lib/storage";
 import { resetMemoryStorage } from "@/lib/storage/memory";
 import sharp from "sharp";
 
@@ -94,6 +95,7 @@ describe("Phase 4.6 credit billing", () => {
   const userIds: string[] = [];
 
   afterEach(() => {
+    setStorageForTests(null);
     resetMemoryStorage();
     resetRateLimits();
     resetEnvCache();
@@ -496,6 +498,117 @@ describe("Phase 4.6 credit billing", () => {
     const strangerEntries = (await getCreditLedger(stranger.userId, { limit: 100 })).entries;
     expect(strangerEntries.every((entry) => !ownerIds.has(entry.id))).toBe(true);
     expect(strangerEntries.every((entry) => entry.type === "grant")).toBe(true);
+  });
+
+  it("reserves once per job id and rejects a conflicting second reservation", async () => {
+    const owner = await createAccount(20);
+    userIds.push(owner.userId);
+    const jobId = randomUUID();
+    const reservationId = randomUUID();
+    const first = await reserveCredits({
+      userId: owner.userId,
+      credits: 10,
+      jobId,
+      reservationId,
+      operation: "GENERATE",
+    });
+    const replay = await reserveCredits({
+      userId: owner.userId,
+      credits: 10,
+      jobId,
+      reservationId,
+      operation: "GENERATE",
+    });
+    expect(replay.id).toBe(first.id);
+    expect(await prisma.creditReservation.count({ where: { jobId } })).toBe(1);
+    expect(await prisma.creditLedgerEntry.count({ where: { userId: owner.userId, reason: "reserve" } })).toBe(1);
+    await expect(
+      reserveCredits({
+        userId: owner.userId,
+        credits: 8,
+        jobId,
+        reservationId: randomUUID(),
+        operation: "GENERATE",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await getCreditBalance(owner.userId)).toMatchObject({
+      availableCredits: 10,
+      reservedCredits: 10,
+    });
+  });
+
+  it("releases a cancelled job once during reconciliation", async () => {
+    const owner = await createAccount(20);
+    userIds.push(owner.userId);
+    const project = await createProject(owner.userId, { name: "Cancel", description: "" });
+    const job = await createGenerateJob(owner.userId, {
+      operation: "GENERATE",
+      projectId: project.id,
+      prompt: "will be cancelled",
+    });
+    await prisma.aIJob.update({
+      where: { id: job.id },
+      data: { status: "cancelled", finishedAt: new Date() },
+    });
+    const cancelled = await processJob(job.id);
+    expect(cancelled.status).toBe("cancelled");
+    expect(await getCreditBalance(owner.userId)).toMatchObject({
+      availableCredits: 20,
+      reservedCredits: 0,
+      lifetimeConsumed: 0,
+    });
+    await processJob(job.id);
+    expect(await prisma.creditLedgerEntry.count({ where: { userId: owner.userId, reason: "release" } })).toBe(1);
+  });
+
+  it("keeps the hold when provider success is followed by a storage failure", async () => {
+    const owner = await createAccount(20);
+    userIds.push(owner.userId);
+    const project = await createProject(owner.userId, { name: "Storage fail", description: "" });
+    setStorageForTests({
+      driver: "memory",
+      async putObject() {
+        throw new Error("simulated object store outage");
+      },
+      async getObject() {
+        return null;
+      },
+      async deleteObject() {
+        return;
+      },
+      async presignPut() {
+        return "http://127.0.0.1/put";
+      },
+      async presignGet() {
+        return "http://127.0.0.1/get";
+      },
+    });
+    const job = await createGenerateJob(owner.userId, {
+      operation: "GENERATE",
+      projectId: project.id,
+      prompt: "provider ok storage down",
+    });
+    await expect(processJob(job.id)).rejects.toMatchObject({ code: "STORAGE_UNAVAILABLE" });
+    expect(await getCreditBalance(owner.userId)).toMatchObject({
+      availableCredits: 10,
+      reservedCredits: 10,
+    });
+    expect((await prisma.aIJob.findUniqueOrThrow({ where: { id: job.id } })).status).toBe("queued");
+    await expect(processJob(job.id)).rejects.toMatchObject({ code: "STORAGE_UNAVAILABLE" });
+    await expect(processJob(job.id)).rejects.toMatchObject({ code: "STORAGE_UNAVAILABLE" });
+    const exhausted = await prisma.aIJob.findUniqueOrThrow({ where: { id: job.id } });
+    expect(exhausted.status).toBe("failed");
+    expect(exhausted.errorCode).toBe("STORAGE_UNAVAILABLE");
+    expect(await getCreditBalance(owner.userId)).toMatchObject({
+      availableCredits: 10,
+      reservedCredits: 10,
+      lifetimeConsumed: 0,
+    });
+    expect(await prisma.creditReservation.findUniqueOrThrow({ where: { jobId: job.id } })).toMatchObject({
+      status: "pending",
+    });
+    expect(await prisma.asset.count({ where: { userId: owner.userId, kind: "GENERATED" } })).toBe(0);
+    setStorageForTests(null);
   });
 
   it("does not enqueue an unauthenticated job and does not create billing rows", async () => {

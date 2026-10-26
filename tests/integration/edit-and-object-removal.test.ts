@@ -367,8 +367,8 @@ describe("edit and object-removal jobs", () => {
       assetId: original.id,
       prompt: "make it blue",
     });
-    const failed = await processJob(failedJob.id);
-    expect(failed.status).toBe("failed");
+    await expect(processJob(failedJob.id)).rejects.toMatchObject({ code: "STORAGE_UNAVAILABLE" });
+    expect((await prisma.aIJob.findUniqueOrThrow({ where: { id: failedJob.id } })).status).toBe("queued");
     expect(await prisma.asset.count({ where: { userId: owner.userId, kind: "DERIVATIVE" } })).toBe(0);
 
     setStorageForTests(null);

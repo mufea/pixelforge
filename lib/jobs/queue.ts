@@ -6,6 +6,7 @@ import { logger } from "@/lib/logging";
 
 let queue: Queue | null = null;
 let connection: IORedis | null = null;
+let worker: Worker | null = null;
 
 function redis() {
   const env = getEnv();
@@ -54,7 +55,7 @@ export function startJobWorker() {
     logger.warn("REDIS_URL is not set; worker will not consume the queue");
     return null;
   }
-  return new Worker(
+  worker = new Worker(
     jobsQueueName(),
     async (job) => {
       const jobId = String(job.data.jobId ?? "");
@@ -62,4 +63,20 @@ export function startJobWorker() {
     },
     { ...queueOptions(conn), concurrency: 2 },
   );
+  return worker;
+}
+
+export async function stopJobRuntime() {
+  if (worker) {
+    await worker.close();
+    worker = null;
+  }
+  if (queue) {
+    await queue.close();
+    queue = null;
+  }
+  if (connection) {
+    connection.disconnect();
+    connection = null;
+  }
 }

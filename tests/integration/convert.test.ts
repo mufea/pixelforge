@@ -167,7 +167,9 @@ describe("image conversion", () => {
       presignGet: (key, expires) => inner.presignGet(key, expires),
     });
 
-    await expect(convertOwnedAsset(owner.userId, original.id, { outputFormat: "image/webp" })).rejects.toThrow(/disk full/);
+    await expect(convertOwnedAsset(owner.userId, original.id, { outputFormat: "image/webp" })).rejects.toMatchObject({
+      code: "STORAGE_UNAVAILABLE",
+    });
     expect(await prisma.asset.count({ where: { userId: owner.userId, kind: "DERIVATIVE" } })).toBe(0);
     expect(await getOwnedAsset(owner.userId, original.id)).toMatchObject({ id: original.id });
   });

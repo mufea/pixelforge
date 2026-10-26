@@ -1,4 +1,4 @@
-import { isRetryableProviderCode } from "@/lib/ai/errors";
+import { isRetryableJobCode } from "@/lib/ai/errors";
 import { releaseCredits, settleCredits } from "@/lib/billing/service";
 import { prisma } from "@/lib/db";
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
@@ -32,11 +32,11 @@ export async function reconcileJobCredits(job: JobCreditState, db?: DbClient) {
     await releaseCredits(ref, client);
     return;
   }
-  if (job.status === "failed" && job.errorCode && !isRetryableProviderCode(job.errorCode)) {
+  if (job.status === "failed" && job.errorCode && !isRetryableJobCode(job.errorCode)) {
     await releaseCredits(ref, client);
   }
 }
 
 export function shouldReleaseCreditsForFailure(code: string) {
-  return !isRetryableProviderCode(code);
+  return !isRetryableJobCode(code);
 }

@@ -6,13 +6,27 @@ export const RETRYABLE_PROVIDER_CODES = new Set([
   "TIMEOUT",
 ]);
 
+export const RETRYABLE_STORAGE_CODES = new Set([
+  "STORAGE_UNAVAILABLE",
+  "STORAGE_NOT_CONFIGURED",
+]);
+
+export const RETRYABLE_JOB_CODES = new Set([
+  ...RETRYABLE_PROVIDER_CODES,
+  ...RETRYABLE_STORAGE_CODES,
+]);
+
 export function isRetryableProviderCode(code: string): boolean {
   return RETRYABLE_PROVIDER_CODES.has(code);
 }
 
+export function isRetryableJobCode(code: string): boolean {
+  return RETRYABLE_JOB_CODES.has(code);
+}
+
 export function isRetryableProviderError(error: unknown): boolean {
   if (error instanceof DomainError) {
-    return isRetryableProviderCode(error.code);
+    return isRetryableJobCode(error.code);
   }
   return isAbortLike(error);
 }

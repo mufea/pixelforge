@@ -212,7 +212,7 @@ describe("batch convert, resize, and crop", () => {
         assetIds: [first.id, second.id],
         outputFormat: "image/jpeg",
       }),
-    ).rejects.toThrow(/disk full/);
+    ).rejects.toMatchObject({ code: "STORAGE_UNAVAILABLE" });
     expect(await prisma.asset.count({ where: { userId: owner.userId, kind: "DERIVATIVE" } })).toBe(0);
     expect(await getOwnedAsset(owner.userId, first.id)).toMatchObject({ id: first.id });
     expect(await getOwnedAsset(owner.userId, second.id)).toMatchObject({ id: second.id });

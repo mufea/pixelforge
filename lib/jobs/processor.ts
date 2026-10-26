@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { isRetryableProviderCode, isRetryableProviderError } from "@/lib/ai/errors";
+import { isRetryableJobCode, isRetryableProviderError } from "@/lib/ai/errors";
 import {
   getProviderTimeoutMs,
   resolveProvider,
@@ -37,7 +37,7 @@ export async function processJob(jobId: string) {
     await reconcileJobCredits(existing);
     return existing;
   }
-  if (existing.status === "failed" && existing.errorCode && !isRetryableProviderCode(existing.errorCode)) {
+  if (existing.status === "failed" && existing.errorCode && !isRetryableJobCode(existing.errorCode)) {
     await reconcileJobCredits(existing);
     return existing;
   }
@@ -117,7 +117,7 @@ export async function processJob(jobId: string) {
   } catch (error) {
     const code = error instanceof DomainError ? error.code : "JOB_FAILED";
     const message = error instanceof DomainError ? error.message : "The job failed";
-    const retryable = isRetryableProviderError(error) || isRetryableProviderCode(code);
+    const retryable = isRetryableProviderError(error) || isRetryableJobCode(code);
     logger.error({ jobId, code }, "Job processing failed");
 
     if (retryable && job.attemptCount < 3) {
