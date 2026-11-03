@@ -15,6 +15,8 @@ No extra web/worker duplicates. Object storage is **not** a Render disk: product
 
 ## Env group `pixelforge-secrets` (both web and worker)
 
+Declared in `render.yaml` as `envVarGroups`. Fill secret values in the dashboard after Blueprint create/sync. Do not commit values. `sync: false` is not valid inside an env group.
+
 | Variable | Service | Secret? |
 | --- | --- | --- |
 | `APP_URL` | web (+ worker if generating links) | no |
