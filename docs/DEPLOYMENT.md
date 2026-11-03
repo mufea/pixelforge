@@ -44,7 +44,7 @@ Environment-specific files: never bake production URLs into the image. Pass `APP
 
 ## Render.com
 
-`render.yaml` is a Blueprint for a Docker **web** service, a Docker **worker**, Render Postgres 16, and Render Key Value (Redis). It does not deploy the app by itself.
+`render.yaml` is a Blueprint for a Docker **web** service, a Docker **worker**, Render Postgres 16, and Render Key Value (Redis). It does not deploy the app by itself. The Blueprint also declares env group `pixelforge-secrets` so `fromGroup` links validate; fill values in the dashboard after the first sync.
 
 Required env group `pixelforge-secrets` (never commit values):
 

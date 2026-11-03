@@ -52,6 +52,7 @@ export type DeployConfigInput = {
   migrationNames: string[];
   dockerfileWeb: string;
   dockerfileWorker: string;
+  renderYaml?: string;
 };
 
 const S3_KEYS = ["S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"] as const;
@@ -103,6 +104,10 @@ export function evaluateDeployConfig(input: DeployConfigInput): PreflightReport 
     workerShimCheck(input.packageScripts.worker),
   );
 
+  if (input.renderYaml !== undefined) {
+    checks.push(blueprintEnvGroupsCheck(input.renderYaml));
+  }
+
   if (production) {
     checks.push(
       present("config.redis_url_production", "worker", env.REDIS_URL, "REDIS_URL is set for production workers", true),
@@ -144,11 +149,12 @@ export async function runDeploymentPreflight(input: {
 }): Promise<PreflightReport> {
   const cwd = input.cwd ?? process.cwd();
   const env = input.env ?? process.env;
-  const [packageJson, dockerfileWeb, dockerfileWorker, migrationNames] = await Promise.all([
+  const [packageJson, dockerfileWeb, dockerfileWorker, migrationNames, renderYaml] = await Promise.all([
     readText(path.join(cwd, "package.json")),
     readText(path.join(cwd, "Dockerfile")),
     readText(path.join(cwd, "Dockerfile.worker")),
     listMigrations(path.join(cwd, "prisma", "migrations")),
+    readText(path.join(cwd, "render.yaml")),
   ]);
   const scripts = (JSON.parse(packageJson) as { scripts?: Record<string, string> }).scripts ?? {};
   const report = evaluateDeployConfig({
@@ -157,6 +163,7 @@ export async function runDeploymentPreflight(input: {
     migrationNames,
     dockerfileWeb,
     dockerfileWorker,
+    renderYaml,
   });
 
   if (!input.connect) {
@@ -438,6 +445,57 @@ function dockerfileCheck(id: string, scope: PreflightScope, contents: string, ne
     scope,
     kind: "artifact",
     summary: ok ? `${id.replace("artifact.", "")} contains ${needle}` : `${id.replace("artifact.", "")} is missing ${needle}`,
+  };
+}
+
+export function missingBlueprintEnvGroups(yaml: string): string[] {
+  const referenced = [...yaml.matchAll(/^[ \t]*-[ \t]+fromGroup:[ \t]*(\S+)[ \t]*$/gm)].map((match) =>
+    unquoteYamlScalar(match[1]),
+  );
+  const defined = new Set<string>();
+  let inGroups = false;
+
+  for (const line of yaml.split(/\r?\n/)) {
+    if (/^envVarGroups:[ \t]*$/.test(line)) {
+      inGroups = true;
+      continue;
+    }
+    if (!inGroups) {
+      continue;
+    }
+    if (line.trim() === "" || line.trim().startsWith("#")) {
+      continue;
+    }
+    const indent = line.match(/^[ \t]*/)?.[0].length ?? 0;
+    if (indent === 0) {
+      inGroups = false;
+      continue;
+    }
+    const nameMatch = line.match(/^[ \t]*-[ \t]+name:[ \t]*(\S+)[ \t]*$/);
+    if (nameMatch) {
+      defined.add(unquoteYamlScalar(nameMatch[1]));
+    }
+  }
+
+  return [...new Set(referenced)].filter((name) => !defined.has(name)).sort();
+}
+
+function unquoteYamlScalar(value: string) {
+  return value.replace(/^['"]|['"]$/g, "");
+}
+
+function blueprintEnvGroupsCheck(yaml: string): PreflightCheck {
+  const missing = missingBlueprintEnvGroups(yaml);
+  return {
+    id: "artifact.render_env_groups",
+    ok: missing.length === 0,
+    required: true,
+    scope: "both",
+    kind: "artifact",
+    summary:
+      missing.length === 0
+        ? "Blueprint fromGroup names are declared in envVarGroups"
+        : `Blueprint fromGroup references missing envVarGroups: ${missing.join(", ")}`,
   };
 }
 

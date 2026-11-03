@@ -22,7 +22,7 @@ External to Render (R2, AWS S3, or hosted MinIO). Create a private bucket. Do no
 
 ### 5. Configure environment groups and service-specific secrets
 
-Create `pixelforge-secrets` in the dashboard. Use [ENV_MATRIX.md](./ENV_MATRIX.md). Web and worker must share database, Redis, S3, provider keys, `APP_URL`, and `AI_JOBS_ENABLED`. Set `AI_JOBS_ENABLED=false` until checkpoint 9 passes. Leave `STRIPE_*` / `MIDTRANS_*` empty unless a later payments slice is approved. Never commit values.
+The Blueprint declares `pixelforge-secrets` under `envVarGroups` and links it to web and worker. Do not create a second group of the same name. After the first Blueprint sync, fill remaining values in the dashboard. Use [ENV_MATRIX.md](./ENV_MATRIX.md). Web and worker must share database, Redis, S3, provider keys, `APP_URL`, and `AI_JOBS_ENABLED`. `AI_JOBS_ENABLED` defaults to `false` in the Blueprint until checkpoint 9 passes. Leave `STRIPE_*` / `MIDTRANS_*` empty unless a later payments slice is approved. Never commit values. `BETTER_AUTH_SECRET` is generated on first sync unless you replace it.
 
 ### 6. Verify Blueprint configuration
 

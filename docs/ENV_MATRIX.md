@@ -2,7 +2,7 @@
 
 Source of values is what an operator must supply. Preflight (`pnpm preflight`) checks presence and format only. It never prints secret values. `pnpm preflight --connect` additionally runs `SELECT 1` on PostgreSQL and `PING` on Redis. Neither command applies migrations, writes objects, or calls Fal/Stability/Stripe.
 
-`render.yaml` lists Blueprint names. That file is not evidence that the services exist.
+`render.yaml` lists Blueprint names and declares env group `pixelforge-secrets`. That file is not evidence that the services exist.
 
 | Variable | Required | Service | Secret | Source of value | Validation |
 | --- | --- | --- | --- | --- | --- |

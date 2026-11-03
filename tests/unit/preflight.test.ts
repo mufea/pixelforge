@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import {
   evaluateDeployConfig,
   formatPreflightText,
   isSecretEnvName,
+  missingBlueprintEnvGroups,
   redactSecrets,
   REQUIRED_MIGRATIONS,
 } from "@/lib/deploy/preflight";
@@ -109,6 +112,56 @@ describe("deployment preflight", () => {
     );
     expect(leaked).not.toContain("super-secret");
     expect(leaked).toContain("[redacted-url]");
+  });
+
+  it("reports missing Blueprint env groups and accepts the committed render.yaml", () => {
+    const yaml = readFileSync(path.join(process.cwd(), "render.yaml"), "utf8");
+    expect(missingBlueprintEnvGroups(yaml)).toEqual([]);
+    expect(yaml).toMatch(/^envVarGroups:/m);
+    expect(yaml).toContain("name: pixelforge-secrets");
+    expect(yaml).not.toMatch(/^[ \t]*sync:[ \t]*false[ \t]*$/m);
+    expect(
+      missingBlueprintEnvGroups(`
+services:
+  - type: web
+    envVars:
+      - fromGroup: pixelforge-secrets
+`),
+    ).toEqual(["pixelforge-secrets"]);
+
+    const skipped = evaluateDeployConfig({
+      env: baseEnv,
+      packageScripts: scripts,
+      migrationNames: migrations,
+      ...dockerfiles,
+    });
+    expect(skipped.checks.find((check) => check.id === "artifact.render_env_groups")).toBeUndefined();
+
+    const withYaml = evaluateDeployConfig({
+      env: baseEnv,
+      packageScripts: scripts,
+      migrationNames: migrations,
+      ...dockerfiles,
+      renderYaml: yaml,
+    });
+    expect(withYaml.checks.find((check) => check.id === "artifact.render_env_groups")?.ok).toBe(true);
+    expect(withYaml.ok).toBe(true);
+
+    const broken = evaluateDeployConfig({
+      env: baseEnv,
+      packageScripts: scripts,
+      migrationNames: migrations,
+      ...dockerfiles,
+      renderYaml: `
+services:
+  - type: web
+    name: pixelforge-web
+    envVars:
+      - fromGroup: pixelforge-secrets
+`,
+    });
+    expect(broken.ok).toBe(false);
+    expect(broken.checks.find((check) => check.id === "artifact.render_env_groups")?.ok).toBe(false);
   });
 
   it("allows incomplete S3 in development", () => {
